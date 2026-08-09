@@ -1020,18 +1020,26 @@ export component AppWindow inherits Window {
                 // for release. Only when staying at the same edge.
                 if (dock-area.activity-drag-panel != ""
                     && root.dock-target == dock-area.activity-bar-edge) {
-                    // VSCode-style: swap only when cursor crosses the CENTER of
-                    // the target icon slot, not the gap between icons.
-                    // Position 0 center: 19px (4+15), Position 1 center: 53px (38+15).
+                    // General slot computation: derive positions from icon
+                    // layout constants, not hardcoded pixel values.
+                    // Icon layout: 30px icons, 4px gap → stride=34px,
+                    // first center at 4+15=19px from bar edge.
+                    let icon-stride = 34px;
+                    let icon-first-center = 19px;
                     let rel = dock-area.activity-bar-horizontal
                         ? ax - ab.absolute-position.x
                         : ay - ab.absolute-position.y;
                     let dragged-pos = dock-area.activity-drag-panel == "sidebar"
                         ? (dock-area.activity-welcome-first ? 1 : 0)
                         : (dock-area.activity-welcome-first ? 0 : 1);
-                    if (dragged-pos == 0 && rel > 53px) {
-                        dock-area.activity-welcome-first = !dock-area.activity-welcome-first;
-                    } else if (dragged-pos == 1 && rel < 19px) {
+                    // Target slot center: the other icon's center position
+                    let target-center = dragged-pos == 0
+                        ? icon-first-center + icon-stride
+                        : icon-first-center;
+                    // VSCode-style: swap only when cursor crosses the target
+                    // icon's CENTER, not the gap boundary.
+                    if ((dragged-pos == 0 && rel > target-center)
+                        || (dragged-pos == 1 && rel < target-center)) {
                         dock-area.activity-welcome-first = !dock-area.activity-welcome-first;
                     }
                 }
