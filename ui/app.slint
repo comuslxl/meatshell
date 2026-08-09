@@ -1015,6 +1015,19 @@ export component AppWindow inherits Window {
                 root.panel-dragging = true;
                 root.drag-nx = (ax - dock-area.absolute-position.x) / dock-area.width;
                 root.drag-ny = (ay - dock-area.absolute-position.y) / dock-area.height;
+                // Real-time icon sorting (VSCode-style): swap icon positions
+                // as the cursor crosses the bar's midpoint, without waiting
+                // for release. Only when staying at the same edge.
+                if (dock-area.activity-drag-panel != ""
+                    && root.dock-target == dock-area.activity-bar-edge) {
+                    let norm = dock-area.activity-bar-horizontal ? root.drag-nx : root.drag-ny;
+                    let dragged-pos = dock-area.activity-drag-panel == "sidebar"
+                        ? (dock-area.activity-welcome-first ? 1 : 0)
+                        : (dock-area.activity-welcome-first ? 0 : 1);
+                    if (dragged-pos != (norm > 0.5 ? 1 : 0)) {
+                        dock-area.activity-welcome-first = !dock-area.activity-welcome-first;
+                    }
+                }
             }
             icon-drag-end(panel-id) => {
                 if (root.dock-target != "" && root.dock-target != dock-area.activity-bar-edge) {
@@ -1037,8 +1050,7 @@ export component AppWindow inherits Window {
                         root.quick-panel-collapsed = true;
                     }
                 } else {
-                    // Released inside the activity bar → swap icon order.
-                    dock-area.activity-welcome-first = !dock-area.activity-welcome-first;
+                    // Sorting is handled in real-time during icon-drag-move.
                 }
                 root.panel-dragging = false;
                 dock-area.activity-drag-panel = "";
