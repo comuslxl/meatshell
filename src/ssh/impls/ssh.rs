@@ -8,10 +8,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
-use async_trait::async_trait;
 use russh::client::{self, Handle, Handler, Msg};
-use russh::keys::key::PrivateKeyWithHashAlg;
-use russh::keys::{decode_secret_key, load_secret_key, PrivateKey};
+use russh::keys::{decode_secret_key, load_secret_key, PrivateKey, PrivateKeyWithHashAlg};
 use russh::{Channel, ChannelId, ChannelMsg, Disconnect};
 use ssh_key::{HashAlg, PublicKey};
 use tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender};
@@ -833,7 +831,8 @@ pub(crate) async fn authenticate_session(
             let mut ok = handle
                 .authenticate_password(&user, password.as_str())
                 .await
-                .context("password auth failed")?;
+                .context("password auth failed")?
+                .success();
             if !ok {
                 // russh can't switch auth methods on a handle whose first attempt
                 // already failed (it hangs), so reconnect on a fresh handle before
@@ -873,12 +872,12 @@ pub(crate) async fn authenticate_session(
             // RSA keys must be signed with an explicit SHA-2 hash; every other
             // key type carries its own algorithm, so no override is needed.
             let hash = keypair.algorithm().is_rsa().then_some(HashAlg::Sha256);
-            let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(keypair), hash)
-                .context("invalid private key / hash algorithm combination")?;
+            let key_with_hash = PrivateKeyWithHashAlg::new(Arc::new(keypair), hash);
             handle
                 .authenticate_publickey(&user, key_with_hash)
                 .await
                 .context("publickey auth failed")?
+                .success()
         }
     };
 
@@ -2318,7 +2317,7 @@ where
     for _ in 0..16 {
         match res {
             Kb::Success => return Ok(true),
-            Kb::Failure => return Ok(false),
+            Kb::Failure { .. } => return Ok(false),
             Kb::InfoRequest { prompts, .. } => {
                 let mut responses = Vec::with_capacity(prompts.len());
                 for p in &prompts {
@@ -2460,7 +2459,6 @@ pub(crate) async fn resolve_credentials(
     }
 }
 
-#[async_trait]
 impl Handler for ClientHandler {
     type Error = russh::Error;
 
@@ -2490,8 +2488,10 @@ impl Handler for ClientHandler {
         connected_port: u32,
         _originator_address: &str,
         _originator_port: u32,
+        reply: client::ChannelOpenHandle,
         _session: &mut client::Session,
     ) -> Result<(), Self::Error> {
+        reply.accept().await;
         let target = self.remote_forwards.get(&connected_port).cloned();
         let events = self.events.clone();
         let bind = connected_address.to_string();
