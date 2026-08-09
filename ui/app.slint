@@ -919,13 +919,15 @@ export component AppWindow inherits Window {
         property <bool> combine-collapsed-tools:
             root.welcome-as-sidebar && root.welcome-collapsed
             && root.sidebar-collapsed && root.sidebar-dock == root.welcome-sidebar-dock;
-        // VSCode-style activity bar: when both panels share the left edge, a
-        // single always-visible icon strip replaces the scattered ToolStrips.
-        // Both icons are always present; the expanded panel's icon is active.
-        property <bool> left-activity-bar:
-            root.welcome-as-sidebar
-            && root.welcome-sidebar-dock == "left"
-            && root.sidebar-dock == "left";
+        // VSCode-style activity bar: when both panels share the same edge (any
+        // of left/right/top/bottom), a single always-visible icon strip replaces
+        // the scattered ToolStrips. Returns the shared edge or "" when inactive.
+        property <string> activity-bar-edge:
+            !root.welcome-as-sidebar ? ""
+            : root.welcome-sidebar-dock == root.sidebar-dock ? root.sidebar-dock
+            : "";
+        property <bool> activity-bar-horizontal:
+            dock-area.activity-bar-edge == "top" || dock-area.activity-bar-edge == "bottom";
         // Icon order in the activity bar (false = sidebar on top, true = welcome
         // on top). Swapped by dragging one icon onto the other's slot.
         property <bool> activity-welcome-first: false;
@@ -937,12 +939,12 @@ export component AppWindow inherits Window {
             root.quick-panel-open && root.quick-panel-collapsed
             && root.welcome-as-sidebar && root.welcome-collapsed
             && root.quick-panel-dock == root.welcome-sidebar-dock
-            && !dock-area.left-activity-bar;
+            && dock-area.activity-bar-edge == "";
         property <bool> quick-merge-sidebar:
             root.quick-panel-open && root.quick-panel-collapsed
             && !dock-area.quick-merge-welcome && root.sidebar-collapsed
             && root.quick-panel-dock == root.sidebar-dock
-            && !dock-area.left-activity-bar;
+            && dock-area.activity-bar-edge == "";
         property <length> quick-outer-strip:
             root.quick-panel-open && root.quick-panel-collapsed
                 && !dock-area.quick-merge-welcome && !dock-area.quick-merge-sidebar
@@ -981,16 +983,22 @@ export component AppWindow inherits Window {
         }
 
         // VSCode-style activity bar: when both the resource sidebar and the
-        // welcome/session panel share the left edge, a single always-visible
-        // icon strip replaces the scattered collapsed ToolStrips. The icon of
-        // the currently-expanded panel is highlighted (accent bar + bg-active).
+        // welcome/session panel share any edge, a single always-visible icon
+        // strip replaces the scattered collapsed ToolStrips. The icon of the
+        // currently-expanded panel is highlighted (accent bar + bg-active).
         // Icons are draggable to reorder or to dock a panel on another edge.
-        if dock-area.left-activity-bar : ToolStrip {
-            x: parent.quick-left;
-            y: parent.quick-top;
-            width: 36px;
-            height: parent.height - parent.quick-top - parent.quick-bottom;
-            dock-edge: "left";
+        if dock-area.activity-bar-edge != "" : ToolStrip {
+            x: dock-area.activity-bar-edge == "right"
+                ? parent.width - parent.quick-right - 36px
+                : parent.quick-left;
+            y: dock-area.activity-bar-edge == "bottom"
+                ? parent.height - parent.quick-bottom - 36px
+                : parent.quick-top;
+            width: dock-area.activity-bar-horizontal
+                ? parent.width - parent.quick-left - parent.quick-right : 36px;
+            height: dock-area.activity-bar-horizontal
+                ? 36px : parent.height - parent.quick-top - parent.quick-bottom;
+            dock-edge: dock-area.activity-bar-edge;
             drag-enabled: true;
             show-second: true;
             // Dynamic icon bindings swap when the user reorders.
@@ -1009,7 +1017,7 @@ export component AppWindow inherits Window {
                 root.drag-ny = (ay - dock-area.absolute-position.y) / dock-area.height;
             }
             icon-drag-end(panel-id) => {
-                if (root.dock-target != "") {
+                if (root.dock-target != "" && root.dock-target != dock-area.activity-bar-edge) {
                     if (panel-id == "sidebar") {
                         root.sidebar-dock = root.dock-target;
                         root.persist-sidebar-dock(root.dock-target);
@@ -1042,7 +1050,7 @@ export component AppWindow inherits Window {
                     if (!root.welcome-collapsed) {
                         root.sidebar-collapsed = true;
                         root.set-sidebar-collapsed(true);
-                        if (root.quick-panel-open && root.quick-panel-dock == "left") {
+                        if (root.quick-panel-open && root.quick-panel-dock == dock-area.activity-bar-edge) {
                             root.quick-panel-collapsed = true;
                         }
                     }
@@ -1052,7 +1060,7 @@ export component AppWindow inherits Window {
                     if (!root.sidebar-collapsed) {
                         root.welcome-collapsed = true;
                         root.set-welcome-collapsed(true);
-                        if (root.quick-panel-open && root.quick-panel-dock == "left") {
+                        if (root.quick-panel-open && root.quick-panel-dock == dock-area.activity-bar-edge) {
                             root.quick-panel-collapsed = true;
                         }
                     }
@@ -1065,7 +1073,7 @@ export component AppWindow inherits Window {
                     if (!root.sidebar-collapsed) {
                         root.welcome-collapsed = true;
                         root.set-welcome-collapsed(true);
-                        if (root.quick-panel-open && root.quick-panel-dock == "left") {
+                        if (root.quick-panel-open && root.quick-panel-dock == dock-area.activity-bar-edge) {
                             root.quick-panel-collapsed = true;
                         }
                     }
@@ -1075,7 +1083,7 @@ export component AppWindow inherits Window {
                     if (!root.welcome-collapsed) {
                         root.sidebar-collapsed = true;
                         root.set-sidebar-collapsed(true);
-                        if (root.quick-panel-open && root.quick-panel-dock == "left") {
+                        if (root.quick-panel-open && root.quick-panel-dock == dock-area.activity-bar-edge) {
                             root.quick-panel-collapsed = true;
                         }
                     }
@@ -1084,7 +1092,7 @@ export component AppWindow inherits Window {
         }
 
         // Collapsed welcome → a thin left icon strip (click the icon to re-open).
-        if root.welcome-as-sidebar && root.welcome-collapsed && !dock-area.left-activity-bar : ToolStrip {
+        if root.welcome-as-sidebar && root.welcome-collapsed && dock-area.activity-bar-edge == "" : ToolStrip {
             x: root.welcome-sidebar-dock == "right"
                 ? parent.width - parent.quick-right - parent.welcome-strip
                 : root.welcome-sidebar-dock == "left" ? parent.quick-left : parent.quick-left;
@@ -1127,7 +1135,7 @@ export component AppWindow inherits Window {
             expand-third => { root.quick-panel-collapsed = false; }
         }
 
-        if dock-area.sidebar-strip-outside && !dock-area.left-activity-bar : ToolStrip {
+        if dock-area.sidebar-strip-outside && dock-area.activity-bar-edge == "" : ToolStrip {
             x: root.welcome-sidebar-dock == "right"
                 ? parent.width - parent.quick-right - parent.sidebar-outside-strip
                 : root.welcome-sidebar-dock == "left" ? parent.quick-left : parent.quick-left;
@@ -1379,7 +1387,7 @@ export component AppWindow inherits Window {
 
         // Collapsed resource panel → a ToolStrip icon bar at the same docked edge
         // (M5), in place of the old floating expand button.
-        if root.sidebar-collapsed && !dock-area.combine-collapsed-tools && !dock-area.sidebar-strip-outside && !dock-area.left-activity-bar : ToolStrip {
+        if root.sidebar-collapsed && !dock-area.combine-collapsed-tools && !dock-area.sidebar-strip-outside && dock-area.activity-bar-edge == "" : ToolStrip {
             x: root.sidebar-dock == "right" ? parent.width - parent.sb-w : 0px;
             y: root.sidebar-dock == "bottom" ? parent.height - parent.sb-h : 0px;
             width: root.sidebar-horizontal ? parent.sb-w : parent.width;

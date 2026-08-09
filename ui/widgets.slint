@@ -238,6 +238,8 @@ export component ToolStrip inherits Rectangle {
     property <bool> drag-active: false;       // a drag gesture is in progress
     property <bool> drag-was-active: false;    // set on release, suppresses click
     property <string> drag-panel: "";          // panel-id of the pressed icon
+    property <length> drag-press-x: 0px;       // mouse position at press time
+    property <length> drag-press-y: 0px;
 
     background: Theme.bg-panel-alt;
     // Hairline on the inner edge (facing the central content).
@@ -279,34 +281,37 @@ export component ToolStrip inherits Rectangle {
           ta := TouchArea {
               mouse-cursor: root.enabled ? pointer : default;
               pointer-event(e) => {
-                  if (root.drag-enabled) {
-                      if (e.kind == PointerEventKind.down) {
-                          root.drag-active = false;
-                          root.drag-was-active = false;
-                          root.drag-panel = root.drag-id;
-                      }
-                      if (e.kind == PointerEventKind.up) {
-                          if (root.drag-active) {
-                              root.drag-was-active = true;
-                              root.icon-drag-end(root.drag-panel);
+                  if (!root.drag-enabled) {
+                      return;
+                  }
+                  if (e.kind == PointerEventKind.down) {
+                      root.drag-press-x = self.mouse-x;
+                      root.drag-press-y = self.mouse-y;
+                      root.drag-active = false;
+                      root.drag-was-active = false;
+                      root.drag-panel = root.drag-id;
+                  }
+                  if (e.kind == PointerEventKind.move) {
+                      if (root.drag-panel != "" && !root.drag-active) {
+                          if (abs((self.mouse-x - root.drag-press-x) / 1px) > 5.0
+                              || abs((self.mouse-y - root.drag-press-y) / 1px) > 5.0) {
+                              root.drag-active = true;
+                              root.icon-drag-start(root.drag-panel);
                           }
-                          root.drag-active = false;
-                          root.drag-panel = "";
+                      }
+                      if (root.drag-active) {
+                          root.icon-drag-move(
+                              self.absolute-position.x + self.mouse-x,
+                              self.absolute-position.y + self.mouse-y);
                       }
                   }
-              }
-              moved => {
-                  if (root.drag-enabled && root.drag-panel != "" && !root.drag-active) {
-                      if (abs((self.mouse-x - self.pressed-x) / 1px) > 5.0
-                          || abs((self.mouse-y - self.pressed-y) / 1px) > 5.0) {
-                          root.drag-active = true;
-                          root.icon-drag-start(root.drag-panel);
+                  if (e.kind == PointerEventKind.up) {
+                      if (root.drag-active) {
+                          root.drag-was-active = true;
+                          root.icon-drag-end(root.drag-panel);
                       }
-                  }
-                  if (root.drag-active) {
-                      root.icon-drag-move(
-                          self.absolute-position.x + self.mouse-x,
-                          self.absolute-position.y + self.mouse-y);
+                      root.drag-active = false;
+                      root.drag-panel = "";
                   }
               }
               clicked => {
@@ -345,34 +350,37 @@ export component ToolStrip inherits Rectangle {
         ta2 := TouchArea {
             mouse-cursor: pointer;
             pointer-event(e) => {
-                if (root.drag-enabled) {
-                    if (e.kind == PointerEventKind.down) {
-                        root.drag-active = false;
-                        root.drag-was-active = false;
-                        root.drag-panel = root.second-drag-id;
-                    }
-                    if (e.kind == PointerEventKind.up) {
-                        if (root.drag-active) {
-                            root.drag-was-active = true;
-                            root.icon-drag-end(root.drag-panel);
+                if (!root.drag-enabled) {
+                    return;
+                }
+                if (e.kind == PointerEventKind.down) {
+                    root.drag-press-x = self.mouse-x;
+                    root.drag-press-y = self.mouse-y;
+                    root.drag-active = false;
+                    root.drag-was-active = false;
+                    root.drag-panel = root.second-drag-id;
+                }
+                if (e.kind == PointerEventKind.move) {
+                    if (root.drag-panel != "" && !root.drag-active) {
+                        if (abs((self.mouse-x - root.drag-press-x) / 1px) > 5.0
+                            || abs((self.mouse-y - root.drag-press-y) / 1px) > 5.0) {
+                            root.drag-active = true;
+                            root.icon-drag-start(root.drag-panel);
                         }
-                        root.drag-active = false;
-                        root.drag-panel = "";
+                    }
+                    if (root.drag-active) {
+                        root.icon-drag-move(
+                            self.absolute-position.x + self.mouse-x,
+                            self.absolute-position.y + self.mouse-y);
                     }
                 }
-            }
-            moved => {
-                if (root.drag-enabled && root.drag-panel != "" && !root.drag-active) {
-                    if (abs((self.mouse-x - self.pressed-x) / 1px) > 5.0
-                        || abs((self.mouse-y - self.pressed-y) / 1px) > 5.0) {
-                        root.drag-active = true;
-                        root.icon-drag-start(root.drag-panel);
+                if (e.kind == PointerEventKind.up) {
+                    if (root.drag-active) {
+                        root.drag-was-active = true;
+                        root.icon-drag-end(root.drag-panel);
                     }
-                }
-                if (root.drag-active) {
-                    root.icon-drag-move(
-                        self.absolute-position.x + self.mouse-x,
-                        self.absolute-position.y + self.mouse-y);
+                    root.drag-active = false;
+                    root.drag-panel = "";
                 }
             }
             clicked => {
@@ -411,34 +419,37 @@ export component ToolStrip inherits Rectangle {
         ta3 := TouchArea {
             mouse-cursor: pointer;
             pointer-event(e) => {
-                if (root.drag-enabled) {
-                    if (e.kind == PointerEventKind.down) {
-                        root.drag-active = false;
-                        root.drag-was-active = false;
-                        root.drag-panel = root.third-drag-id;
-                    }
-                    if (e.kind == PointerEventKind.up) {
-                        if (root.drag-active) {
-                            root.drag-was-active = true;
-                            root.icon-drag-end(root.drag-panel);
+                if (!root.drag-enabled) {
+                    return;
+                }
+                if (e.kind == PointerEventKind.down) {
+                    root.drag-press-x = self.mouse-x;
+                    root.drag-press-y = self.mouse-y;
+                    root.drag-active = false;
+                    root.drag-was-active = false;
+                    root.drag-panel = root.third-drag-id;
+                }
+                if (e.kind == PointerEventKind.move) {
+                    if (root.drag-panel != "" && !root.drag-active) {
+                        if (abs((self.mouse-x - root.drag-press-x) / 1px) > 5.0
+                            || abs((self.mouse-y - root.drag-press-y) / 1px) > 5.0) {
+                            root.drag-active = true;
+                            root.icon-drag-start(root.drag-panel);
                         }
-                        root.drag-active = false;
-                        root.drag-panel = "";
+                    }
+                    if (root.drag-active) {
+                        root.icon-drag-move(
+                            self.absolute-position.x + self.mouse-x,
+                            self.absolute-position.y + self.mouse-y);
                     }
                 }
-            }
-            moved => {
-                if (root.drag-enabled && root.drag-panel != "" && !root.drag-active) {
-                    if (abs((self.mouse-x - self.pressed-x) / 1px) > 5.0
-                        || abs((self.mouse-y - self.pressed-y) / 1px) > 5.0) {
-                        root.drag-active = true;
-                        root.icon-drag-start(root.drag-panel);
+                if (e.kind == PointerEventKind.up) {
+                    if (root.drag-active) {
+                        root.drag-was-active = true;
+                        root.icon-drag-end(root.drag-panel);
                     }
-                }
-                if (root.drag-active) {
-                    root.icon-drag-move(
-                        self.absolute-position.x + self.mouse-x,
-                        self.absolute-position.y + self.mouse-y);
+                    root.drag-active = false;
+                    root.drag-panel = "";
                 }
             }
             clicked => {
