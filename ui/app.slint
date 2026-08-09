@@ -519,6 +519,7 @@ export component AppWindow inherits Window {
     in-out property <bool> collapse-sftp-default: false;
     callback set-collapse-sftp-default(bool);      // apply + persist
     in-out property <bool> sftp-collapsed: false;       // (legacy global; per-tab now)
+    in-out property <bool> active-sftp-collapsed: true; // active tab's SFTP state (activity bar)
     in-out property <length> sftp-saved-height: 220px;  // restore height on un-collapse
     // Per-session SFTP state: persist the collapse + sizes into that tab's
     // TerminalState so split panes / other tabs keep their own (#v0.5).
@@ -1001,13 +1002,17 @@ export component AppWindow inherits Window {
             dock-edge: dock-area.activity-bar-edge;
             drag-enabled: true;
             show-second: true;
+            show-third: true;
             // Dynamic icon bindings swap when the user reorders.
             glyph: dock-area.activity-welcome-first ? "\u{E88A}" : "\u{E871}";
             second-glyph: dock-area.activity-welcome-first ? "\u{E871}" : "\u{E88A}";
+            third-glyph: "\u{E2C8}";   // folder — SFTP
             active: dock-area.activity-welcome-first ? !root.welcome-collapsed : !root.sidebar-collapsed;
             active-second: dock-area.activity-welcome-first ? !root.sidebar-collapsed : !root.welcome-collapsed;
+            active-third: !root.active-sftp-collapsed && root.sftp-dock == dock-area.activity-bar-edge;
             drag-id: dock-area.activity-welcome-first ? "welcome" : "sidebar";
             second-drag-id: dock-area.activity-welcome-first ? "sidebar" : "welcome";
+            third-drag-id: "sftp";
             icon-drag-start(panel-id) => {
                 dock-area.activity-drag-panel = panel-id;
             }
@@ -1114,6 +1119,14 @@ export component AppWindow inherits Window {
                             root.quick-panel-collapsed = true;
                         }
                     }
+                }
+            }
+            expand-third => {
+                if (root.active-sftp-collapsed || root.sftp-dock != dock-area.activity-bar-edge) {
+                    root.sftp-dock = dock-area.activity-bar-edge;
+                    root.set-pane-sftp-collapsed(root.active-tab-id, false);
+                } else {
+                    root.set-pane-sftp-collapsed(root.active-tab-id, true);
                 }
             }
         }

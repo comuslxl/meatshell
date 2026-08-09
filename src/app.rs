@@ -1342,8 +1342,14 @@ pub fn run() -> Result<()> {
     // longer bleeds onto the rest) (#v0.5).
     {
         let terminals_model = terminals_model.clone();
+        let weak = window.as_weak();
         window.on_set_pane_sftp_collapsed(move |tab_id: SharedString, v: bool| {
             update_terminal_row(&terminals_model, &tab_id, |r| r.sftp_collapsed = v);
+            if let Some(w) = weak.upgrade() {
+                if w.get_active_tab_id() == tab_id {
+                    w.set_active_sftp_collapsed(v);
+                }
+            }
         });
     }
     {
@@ -1477,6 +1483,7 @@ pub fn run() -> Result<()> {
         let net = local_net_hist.clone();
         window.on_refresh_sidebar(move || {
             if let Some(w) = weak.upgrade() {
+                sync_active_sftp_state(&w);
                 refresh_sidebar(&w, &statuses, &local, &net);
             }
         });
@@ -2580,6 +2587,23 @@ fn app_content_area(win: &AppWindow) -> LogicalRect {
         );
     }
     area
+}
+
+/// Sync the active tab's SFTP collapse state into the Slint property used by
+/// the activity bar icon. Called on tab switch and on SFTP collapse/expand.
+fn sync_active_sftp_state(win: &AppWindow) {
+    let active = win.get_active_tab_id().to_string();
+    let collapsed = if active.is_empty() || active == "welcome" {
+        true
+    } else {
+        let terms = win.get_terminals();
+        (0..terms.row_count())
+            .filter_map(|i| terms.row_data(i))
+            .find(|t| t.id.as_str() == active.as_str())
+            .map(|t| t.sftp_collapsed)
+            .unwrap_or(true)
+    };
+    win.set_active_sftp_collapsed(collapsed);
 }
 
 fn active_terminal_panel_rects(win: &AppWindow) -> Option<(String, LogicalRect, TerminalState)> {
