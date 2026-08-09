@@ -40,3 +40,29 @@ mod colors;
 mod protocol;
 mod selection;
 mod sftp_sorting;
+
+#[test]
+fn scrolled_viewport_stays_pinned_as_new_output_streams_in() {
+    let mut buffer = make_buf(4, 20, &[], &[], 0);
+
+    // Fill the screen; the first ingest sets `prev`, no scrollback yet.
+    let _ = buffer.ingest(b"row-A\r\nrow-B\r\nrow-C\r\nrow-D");
+    // Second ingest scrolls 2 lines (row-A, row-B) into history.
+    let _ = buffer.ingest(b"\r\nrow-E\r\nrow-F");
+    assert_eq!(buffer.history.len(), 2);
+
+    // Simulate the user scrolling up one row.
+    buffer.view_offset = 1;
+    let _ = buffer.render();
+    let displayed_before: Vec<String> = buffer.displayed_text.clone();
+
+    // Stream more output — this scrolls 2 more lines into history.
+    let _ = buffer.ingest(b"\r\nrow-G\r\nrow-H");
+    let _ = buffer.render();
+    let displayed_after: Vec<String> = buffer.displayed_text.clone();
+
+    // The visible content must not shift.
+    assert_eq!(displayed_before, displayed_after);
+    // view_offset grew by exactly the 2 lines that entered history.
+    assert_eq!(buffer.view_offset, 3);
+}

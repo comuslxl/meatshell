@@ -462,6 +462,13 @@ impl TermBuffer {
             while self.history.len() > MAX_HISTORY {
                 self.history.pop_front();
             }
+            // Pin the viewport: when scrolled up, compensate for new history
+            // lines so the visible content doesn't shift as new output streams in.
+            // pop_front (MAX_HISTORY trim) only removes the oldest content, which
+            // doesn't affect view_offset (counted from the bottom of the window).
+            if self.view_offset > 0 {
+                self.view_offset = self.view_offset.saturating_add(k);
+            }
         }
         self.prev = curr;
     }
