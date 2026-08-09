@@ -987,7 +987,7 @@ export component AppWindow inherits Window {
         // strip replaces the scattered collapsed ToolStrips. The icon of the
         // currently-expanded panel is highlighted (accent bar + bg-active).
         // Icons are draggable to reorder or to dock a panel on another edge.
-        if dock-area.activity-bar-edge != "" : ToolStrip {
+        if dock-area.activity-bar-edge != "" : ab := ToolStrip {
             x: dock-area.activity-bar-edge == "right"
                 ? parent.width - parent.quick-right - 36px
                 : parent.quick-left;
@@ -1020,11 +1020,16 @@ export component AppWindow inherits Window {
                 // for release. Only when staying at the same edge.
                 if (dock-area.activity-drag-panel != ""
                     && root.dock-target == dock-area.activity-bar-edge) {
-                    let norm = dock-area.activity-bar-horizontal ? root.drag-nx : root.drag-ny;
+                    // Midpoint between icon centers: icon1 at y=4+15=19px,
+                    // icon2 at y=38+15=53px → midpoint = 36px from bar top.
+                    // Use bar-relative position, not dock-area-normalized.
+                    let rel = dock-area.activity-bar-horizontal
+                        ? ax - ab.absolute-position.x
+                        : ay - ab.absolute-position.y;
                     let dragged-pos = dock-area.activity-drag-panel == "sidebar"
                         ? (dock-area.activity-welcome-first ? 1 : 0)
                         : (dock-area.activity-welcome-first ? 0 : 1);
-                    if (dragged-pos != (norm > 0.5 ? 1 : 0)) {
+                    if (dragged-pos != (rel > 36px ? 1 : 0)) {
                         dock-area.activity-welcome-first = !dock-area.activity-welcome-first;
                     }
                 }
