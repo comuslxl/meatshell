@@ -41,6 +41,7 @@ pub(crate) enum OutputHighlightPreset {
     Off,
     Log,
     DevOps,
+    WindTerm,
 }
 
 #[derive(Clone)]

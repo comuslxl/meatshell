@@ -701,6 +701,7 @@ impl ConfigStore {
     pub fn output_highlight_preset(&self) -> &str {
         match self.cache.output_highlight_preset.as_str() {
             "devops" => "devops",
+            "windterm" => "windterm",
             _ => "log",
         }
     }
@@ -708,6 +709,7 @@ impl ConfigStore {
     pub fn set_output_highlight_preset(&mut self, preset: String) {
         self.cache.output_highlight_preset = match preset.as_str() {
             "devops" => "devops".to_string(),
+            "windterm" => "windterm".to_string(),
             _ => "log".to_string(),
         };
     }

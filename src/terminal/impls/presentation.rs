@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use crate::terminal::{CompiledOutputRule, HistSpan, OutputHighlightPreset};
 use crate::ui::TermSpan;
@@ -17,6 +18,14 @@ pub(crate) fn highlight_plain_output(
         return runs;
     }
     let runs = highlight_custom_output(runs, custom_rules);
+    // WindTerm preset layers the built-in embedded log rules on top of the
+    // user's custom rules. A second pass is equivalent to concatenating the
+    // slices and avoids cloning the compiled Regex.
+    let runs = if preset == OutputHighlightPreset::WindTerm {
+        highlight_custom_output(runs, embedded_preset_rules())
+    } else {
+        runs
+    };
     const SEARCH_COLS: i32 = 96;
 
     let mut out = Vec::with_capacity(runs.len() + 2);
@@ -335,6 +344,62 @@ fn devops_marker(text: &str, max_chars: usize) -> Option<(usize, usize, u8)> {
         }
     }
     None
+}
+
+static EMBEDDED_PRESET_RULES: OnceLock<Vec<CompiledOutputRule>> = OnceLock::new();
+
+/// Eleven regex rules for embedded/firmware log output, compiled once and
+/// reused on every render. Order matters: specific patterns (hex address, IP,
+/// MAC, timestamp, source file:line) run before broad keyword patterns
+/// (panic/oom/watchdog) so a token is claimed by the most specific rule first.
+/// All rules are case-insensitive and match substrings (`whole_line = false`).
+fn embedded_preset_rules() -> &'static [CompiledOutputRule] {
+    EMBEDDED_PRESET_RULES.get_or_init(|| {
+        // (pattern, xterm-256 colour index): cyan=14, magenta=13, gray=8,
+        // red=9, yellow=11, green=10 — matching `highlight_color_index`.
+        const RULES: &[(&str, u8)] = &[
+            (r"\b(?:\d{1,3}\.){3}\d{1,3}\b", 14),
+            (r"\b(?:[0-9a-fA-F]{2}[:-]){5}[0-9a-fA-F]{2}\b", 14),
+            (r"0x[0-9a-fA-F]{4,}", 13),
+            (r"\b[0-9a-fA-F]{8,16}\b", 13),
+            (
+                r"\d{4}[-/]\d{1,2}[-/]\d{1,2}[ T]\d{1,2}:\d{2}:\d{2}(?:\.\d+)?",
+                14,
+            ),
+            (r"\b\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\b", 8),
+            (r"[\w/\-]+\.[a-zA-Z]+:\d+", 14),
+            (
+                r"\b(?:panic|fault|abort|assert|exception|backtrace|segfault|core dump|stack overflow|double free)\b",
+                9,
+            ),
+            (
+                r"\b(?:out of memory|oom|null pointer|dereference|alloc(?:ation)? failed|malloc failed|heap corruption)\b",
+                9,
+            ),
+            (
+                r"\b(?:watchdog|reboot|reset|deprecated|timed out|timeout|overflow|underflow|underrun|stall|bus error)\b",
+                11,
+            ),
+            (
+                r"\b(?:ready|connected|initialized|mounted|started|online|healthy|boot complete)\b",
+                10,
+            ),
+        ];
+        RULES
+            .iter()
+            .filter_map(|&(pattern, ansi_index)| {
+                regex::RegexBuilder::new(pattern)
+                    .case_insensitive(true)
+                    .build()
+                    .ok()
+                    .map(|matcher| CompiledOutputRule {
+                        matcher,
+                        whole_line: false,
+                        ansi_index,
+                    })
+            })
+            .collect()
+    })
 }
 
 fn ascii_word_boundary(bytes: &[u8], start: usize, end: usize) -> bool {

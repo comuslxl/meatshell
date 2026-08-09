@@ -81,7 +81,7 @@ pub struct ConfigFile {
     /// output highlighter enabled by default.
     #[serde(default)]
     pub output_highlight_disabled: bool,
-    /// Built-in output highlight preset: "log" (default) or "devops".
+    /// Built-in output highlight preset: "log" (default), "devops", or "windterm".
     #[serde(default)]
     pub output_highlight_preset: String,
     /// User-defined rules applied before the selected built-in preset.

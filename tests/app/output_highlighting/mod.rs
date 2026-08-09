@@ -130,6 +130,76 @@ fn devops_preset_adds_deployment_and_structured_states() {
 }
 
 #[test]
+fn windterm_preset_adds_embedded_log_rules() {
+    // Hex address (0x-prefixed) → magenta.
+    let hex = highlight_plain_output(
+        vec![plain_run("fault at 0x40004800", 0)],
+        OutputHighlightPreset::WindTerm,
+        &[],
+    );
+    let token = hex
+        .iter()
+        .find(|run| run.text == "0x40004800")
+        .expect("hex address should be highlighted");
+    assert!(matches!(token.fg, vt100::Color::Idx(13)));
+
+    // Panic keyword → red.
+    let panic_line = highlight_plain_output(
+        vec![plain_run("kernel panic boot.c:42", 0)],
+        OutputHighlightPreset::WindTerm,
+        &[],
+    );
+    let token = panic_line
+        .iter()
+        .find(|run| run.text == "panic")
+        .expect("panic keyword should be highlighted");
+    assert!(matches!(token.fg, vt100::Color::Idx(9)));
+
+    // IP address → cyan.
+    let ip = highlight_plain_output(
+        vec![plain_run("connect 192.168.1.10 ready", 0)],
+        OutputHighlightPreset::WindTerm,
+        &[],
+    );
+    let token = ip
+        .iter()
+        .find(|run| run.text == "192.168.1.10")
+        .expect("IP address should be highlighted");
+    assert!(matches!(token.fg, vt100::Color::Idx(14)));
+
+    // Log levels are still honoured under WindTerm.
+    let level = highlight_plain_output(
+        vec![plain_run("ERROR oom recovered", 0)],
+        OutputHighlightPreset::WindTerm,
+        &[],
+    );
+    let token = level
+        .iter()
+        .find(|run| run.text == "ERROR")
+        .expect("log level should still be highlighted under WindTerm");
+    assert!(matches!(token.fg, vt100::Color::Idx(9)));
+
+    // The Log preset must NOT apply the embedded rules.
+    let log_only = highlight_plain_output(
+        vec![plain_run("fault at 0x40004800", 0)],
+        OutputHighlightPreset::Log,
+        &[],
+    );
+    assert_eq!(log_only.len(), 1);
+    assert!(matches!(log_only[0].fg, vt100::Color::Default));
+    assert!(!log_only[0].bold);
+
+    // The DevOps preset must NOT apply the embedded rules.
+    let devops_hex = highlight_plain_output(
+        vec![plain_run("fault at 0x40004800", 0)],
+        OutputHighlightPreset::DevOps,
+        &[],
+    );
+    assert_eq!(devops_hex.len(), 1);
+    assert!(matches!(devops_hex[0].fg, vt100::Color::Default));
+}
+
+#[test]
 fn custom_literal_is_case_insensitive_and_overrides_builtin_colour() {
     let rule = custom_rule("error", false, false, false, "green");
     let runs = highlight_plain_output(
