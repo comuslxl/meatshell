@@ -808,6 +808,45 @@ pub(crate) enum AuthResult {
     Failed,
 }
 
+/// Try SSH agent authentication (Unix only). Connects to `$SSH_AUTH_SOCK`,
+/// enumerates loaded identities, and attempts `authenticate_publickey_with`
+/// for each one. Returns `true` on success; silently falls through on any
+/// error (no agent running, no identities, all keys rejected). Capped at 5
+/// identity attempts so a bloated agent can't stall the session.
+#[cfg(unix)]
+pub(crate) async fn try_agent_auth<H: Handler>(handle: &mut Handle<H>, user: &str) -> bool {
+    use russh::keys::agent::{client::AgentClient, AgentIdentity};
+
+    let mut agent = match AgentClient::connect_env().await {
+        Ok(a) => a,
+        Err(_) => return false,
+    };
+    let identities = match agent.request_identities().await {
+        Ok(ids) => ids,
+        Err(_) => return false,
+    };
+    for identity in identities.iter().take(5) {
+        let pubkey = match identity {
+            AgentIdentity::PublicKey { key, .. } => key.clone(),
+            AgentIdentity::Certificate { .. } => continue,
+        };
+        if let Ok(result) = handle
+            .authenticate_publickey_with(user, pubkey, None, &mut agent)
+            .await
+        {
+            if result.success() {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+#[cfg(not(unix))]
+pub(crate) async fn try_agent_auth<H: Handler>(_handle: &mut Handle<H>, _user: &str) -> bool {
+    false
+}
+
 /// Authenticate an already-connected SSH handle using the session's method,
 /// prompting for missing credentials and supporting explicit / fallback
 /// `keyboard-interactive` auth (#86, #249). Shared by the shell, SFTP and
@@ -825,6 +864,12 @@ pub(crate) async fn authenticate_session(
         Some(c) => c,
         None => return Ok(AuthResult::Cancelled),
     };
+
+    // --- SSH Agent (tried first so users with an encrypted private key loaded
+    // into a running agent don't need to enter the passphrase) ---
+    if try_agent_auth(handle, &user).await {
+        return Ok(AuthResult::Success);
+    }
 
     let authed = match session.auth {
         AuthMethod::Password => {

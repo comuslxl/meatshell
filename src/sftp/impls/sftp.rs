@@ -327,8 +327,11 @@ async fn run_sftp(
         None => return Err(anyhow!(t("已取消登录", "login cancelled"))),
     };
 
-    // --- Authenticate (same method as the shell session) -------------------
-    let authed = match session.auth {
+    // --- Authenticate (agent first, then same method as the shell session) ---
+    let authed = if crate::ssh::try_agent_auth(&mut handle, &user).await {
+        true
+    } else {
+        match session.auth {
         AuthMethod::Password => {
             let mut ok = handle
                 .authenticate_password(&user, password.as_str())
@@ -421,6 +424,7 @@ async fn run_sftp(
                 .await
                 .context("sftp publickey auth failed")?
                 .success()
+        }
         }
     };
 
