@@ -215,10 +215,29 @@ export component ToolStrip inherits Rectangle {
     in property <string> third-glyph;
     in property <string> tooltip;
     in property <bool> enabled: true;
+    // VSCode Activity Bar active state: shows an accent edge bar + highlighted
+    // background + text-primary icon colour for the currently-open panel.
+    in property <bool> active: false;
+    in property <bool> active-second: false;
+    in property <bool> active-third: false;
+    // Icon drag support (activity bar): when enabled, long-press + move on an
+    // icon triggers panel dock-drag instead of click-to-expand.
+    in property <bool> drag-enabled: false;
+    in property <string> drag-id: "";
+    in property <string> second-drag-id: "";
+    in property <string> third-drag-id: "";
     callback expand();
     callback expand-second();
     callback expand-third();
+    callback icon-drag-start(string /* panel-id */);
+    callback icon-drag-move(length /* abs-x */, length /* abs-y */);
+    callback icon-drag-end(string /* panel-id */);
     property <bool> horizontal: root.dock-edge == "top" || root.dock-edge == "bottom";
+
+    // Internal drag state shared across icon slots.
+    property <bool> drag-active: false;       // a drag gesture is in progress
+    property <bool> drag-was-active: false;    // set on release, suppresses click
+    property <string> drag-panel: "";          // panel-id of the pressed icon
 
     background: Theme.bg-panel-alt;
     // Hairline on the inner edge (facing the central content).
@@ -229,6 +248,14 @@ export component ToolStrip inherits Rectangle {
         height: root.horizontal ? 1px : parent.height;
         background: Theme.border-subtle;
     }
+    // Active-indicator accent bar (VSCode-style left edge highlight).
+    if root.active && !root.horizontal : Rectangle {
+        x: 0px;
+        y: 4px;
+        width: 2px;
+        height: 30px;
+        background: Theme.accent;
+    }
     // Tool icon, hugging the strip's near corner.
     Rectangle {
         width: 30px;
@@ -236,13 +263,14 @@ export component ToolStrip inherits Rectangle {
         x: root.horizontal ? 4px : (parent.width - self.width) / 2;
         y: root.horizontal ? (parent.height - self.height) / 2 : 4px;
         border-radius: Theme.radius-sm;
-          background: root.enabled && ta.has-hover ? Theme.bg-hover : transparent;
+          background: root.enabled && ta.has-hover ? Theme.bg-hover
+              : root.active ? Theme.bg-active : transparent;
           Text {
               text: root.glyph;
               font-family: "Material Icons";
               font-size: 18px;
               color: !root.enabled ? Theme.text-muted.with-alpha(0.45)
-                  : ta.has-hover ? Theme.text-primary : Theme.text-secondary;
+                  : (root.active || ta.has-hover) ? Theme.text-primary : Theme.text-secondary;
             horizontal-alignment: center;
             vertical-alignment: center;
             width: parent.width;
@@ -250,25 +278,65 @@ export component ToolStrip inherits Rectangle {
         }
           ta := TouchArea {
               mouse-cursor: root.enabled ? pointer : default;
+              pointer-event(e) => {
+                  if (root.drag-enabled) {
+                      if (e.kind == PointerEventKind.down) {
+                          root.drag-active = false;
+                          root.drag-was-active = false;
+                          root.drag-panel = root.drag-id;
+                      }
+                      if (e.kind == PointerEventKind.up) {
+                          if (root.drag-active) {
+                              root.drag-was-active = true;
+                              root.icon-drag-end(root.drag-panel);
+                          }
+                          root.drag-active = false;
+                          root.drag-panel = "";
+                      }
+                  }
+              }
+              moved => {
+                  if (root.drag-enabled && root.drag-panel != "" && !root.drag-active) {
+                      if (abs((self.mouse-x - self.pressed-x) / 1px) > 5.0
+                          || abs((self.mouse-y - self.pressed-y) / 1px) > 5.0) {
+                          root.drag-active = true;
+                          root.icon-drag-start(root.drag-panel);
+                      }
+                  }
+                  if (root.drag-active) {
+                      root.icon-drag-move(
+                          self.absolute-position.x + self.mouse-x,
+                          self.absolute-position.y + self.mouse-y);
+                  }
+              }
               clicked => {
-                  if (root.enabled) {
+                  if (root.enabled && !root.drag-was-active) {
                       root.expand();
                   }
+                  root.drag-was-active = false;
               }
           }
       }
+    if root.active-second && !root.horizontal : Rectangle {
+        x: 0px;
+        y: 38px;
+        width: 2px;
+        height: 30px;
+        background: Theme.accent;
+    }
     if root.show-second : Rectangle {
         width: 30px;
         height: 30px;
         x: root.horizontal ? 38px : (parent.width - self.width) / 2;
         y: root.horizontal ? (parent.height - self.height) / 2 : 38px;
         border-radius: Theme.radius-sm;
-        background: ta2.has-hover ? Theme.bg-hover : transparent;
+        background: ta2.has-hover ? Theme.bg-hover
+            : root.active-second ? Theme.bg-active : transparent;
         Text {
             text: root.second-glyph;
             font-family: "Material Icons";
             font-size: 18px;
-            color: ta2.has-hover ? Theme.text-primary : Theme.text-secondary;
+            color: (root.active-second || ta2.has-hover) ? Theme.text-primary : Theme.text-secondary;
             horizontal-alignment: center;
             vertical-alignment: center;
             width: parent.width;
@@ -276,8 +344,51 @@ export component ToolStrip inherits Rectangle {
         }
         ta2 := TouchArea {
             mouse-cursor: pointer;
-            clicked => { root.expand-second(); }
+            pointer-event(e) => {
+                if (root.drag-enabled) {
+                    if (e.kind == PointerEventKind.down) {
+                        root.drag-active = false;
+                        root.drag-was-active = false;
+                        root.drag-panel = root.second-drag-id;
+                    }
+                    if (e.kind == PointerEventKind.up) {
+                        if (root.drag-active) {
+                            root.drag-was-active = true;
+                            root.icon-drag-end(root.drag-panel);
+                        }
+                        root.drag-active = false;
+                        root.drag-panel = "";
+                    }
+                }
+            }
+            moved => {
+                if (root.drag-enabled && root.drag-panel != "" && !root.drag-active) {
+                    if (abs((self.mouse-x - self.pressed-x) / 1px) > 5.0
+                        || abs((self.mouse-y - self.pressed-y) / 1px) > 5.0) {
+                        root.drag-active = true;
+                        root.icon-drag-start(root.drag-panel);
+                    }
+                }
+                if (root.drag-active) {
+                    root.icon-drag-move(
+                        self.absolute-position.x + self.mouse-x,
+                        self.absolute-position.y + self.mouse-y);
+                }
+            }
+            clicked => {
+                if (!root.drag-was-active) {
+                    root.expand-second();
+                }
+                root.drag-was-active = false;
+            }
         }
+    }
+    if root.active-third && !root.horizontal : Rectangle {
+        x: 0px;
+        y: 72px;
+        width: 2px;
+        height: 30px;
+        background: Theme.accent;
     }
     if root.show-third : Rectangle {
         width: 30px;
@@ -285,12 +396,13 @@ export component ToolStrip inherits Rectangle {
         x: root.horizontal ? 72px : (parent.width - self.width) / 2;
         y: root.horizontal ? (parent.height - self.height) / 2 : 72px;
         border-radius: Theme.radius-sm;
-        background: ta3.has-hover ? Theme.bg-hover : transparent;
+        background: ta3.has-hover ? Theme.bg-hover
+            : root.active-third ? Theme.bg-active : transparent;
         Text {
             text: root.third-glyph;
             font-family: "Material Icons";
             font-size: 18px;
-            color: ta3.has-hover ? Theme.text-primary : Theme.text-secondary;
+            color: (root.active-third || ta3.has-hover) ? Theme.text-primary : Theme.text-secondary;
             horizontal-alignment: center;
             vertical-alignment: center;
             width: parent.width;
@@ -298,7 +410,43 @@ export component ToolStrip inherits Rectangle {
         }
         ta3 := TouchArea {
             mouse-cursor: pointer;
-            clicked => { root.expand-third(); }
+            pointer-event(e) => {
+                if (root.drag-enabled) {
+                    if (e.kind == PointerEventKind.down) {
+                        root.drag-active = false;
+                        root.drag-was-active = false;
+                        root.drag-panel = root.third-drag-id;
+                    }
+                    if (e.kind == PointerEventKind.up) {
+                        if (root.drag-active) {
+                            root.drag-was-active = true;
+                            root.icon-drag-end(root.drag-panel);
+                        }
+                        root.drag-active = false;
+                        root.drag-panel = "";
+                    }
+                }
+            }
+            moved => {
+                if (root.drag-enabled && root.drag-panel != "" && !root.drag-active) {
+                    if (abs((self.mouse-x - self.pressed-x) / 1px) > 5.0
+                        || abs((self.mouse-y - self.pressed-y) / 1px) > 5.0) {
+                        root.drag-active = true;
+                        root.icon-drag-start(root.drag-panel);
+                    }
+                }
+                if (root.drag-active) {
+                    root.icon-drag-move(
+                        self.absolute-position.x + self.mouse-x,
+                        self.absolute-position.y + self.mouse-y);
+                }
+            }
+            clicked => {
+                if (!root.drag-was-active) {
+                    root.expand-third();
+                }
+                root.drag-was-active = false;
+            }
         }
     }
 }
