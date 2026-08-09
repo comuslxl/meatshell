@@ -265,7 +265,9 @@ pub(super) fn apply_output_highlight(
     {
         let handles: Vec<_> = bufs.lock().unwrap().values().cloned().collect();
         for handle in handles {
-            handle.lock().unwrap().output_highlight = mode;
+            let mut buf = handle.lock().unwrap();
+            buf.output_highlight = mode;
+            buf.rebuild_history_highlight_cache();
         }
     }
     let tab_ids: Vec<String> = bufs.lock().unwrap().keys().cloned().collect();
@@ -283,7 +285,9 @@ pub(super) fn apply_custom_output_rules(
     {
         let handles: Vec<_> = bufs.lock().unwrap().values().cloned().collect();
         for handle in handles {
-            handle.lock().unwrap().custom_highlight_rules = compiled.clone();
+            let mut buf = handle.lock().unwrap();
+            buf.custom_highlight_rules = compiled.clone();
+            buf.rebuild_history_highlight_cache();
         }
     }
     let tab_ids: Vec<String> = bufs.lock().unwrap().keys().cloned().collect();

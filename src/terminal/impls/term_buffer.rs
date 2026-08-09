@@ -346,6 +346,7 @@ impl TermBuffer {
         if let Some(end) = erase_saved_through {
             self.raw.drain(..end);
             self.history.clear();
+            self.history_highlight.clear();
             self.prev.clear();
             self.view_offset = 0;
             self.sel_anchor = None;
@@ -407,6 +408,7 @@ impl TermBuffer {
         let stream: Vec<u8> = self.raw.iter().copied().collect();
         self.parser = vt100::Parser::new(new_rows, new_cols, 5000);
         self.history.clear();
+        self.history_highlight.clear();
         self.prev.clear();
         self.view_offset = 0;
         // Scrollback line count changes, so absolute selection coords no longer map.
@@ -414,6 +416,21 @@ impl TermBuffer {
         self.sel_focus = None;
         self.sel_ranges.clear();
         self.feed_batched(&stream);
+    }
+
+    /// Recompute every cached history highlight from scratch. Call after the
+    /// highlight preset or custom rules change — those alter the regex set, so
+    /// cached results computed under the old configuration are stale.
+    pub(crate) fn rebuild_history_highlight_cache(&mut self) {
+        self.history_highlight.clear();
+        for line in &self.history {
+            let highlighted = highlight_plain_output(
+                line.1.clone(),
+                self.output_highlight,
+                &self.custom_highlight_rules,
+            );
+            self.history_highlight.push_back(highlighted);
+        }
     }
 
     /// Process one bounded batch and capture any lines that scrolled off the top
@@ -457,10 +474,17 @@ impl TermBuffer {
         if !self.prev.is_empty() {
             let k = detect_scroll(&self.prev, &curr);
             for line in self.prev.iter().take(k) {
+                let highlighted = highlight_plain_output(
+                    line.1.clone(),
+                    self.output_highlight,
+                    &self.custom_highlight_rules,
+                );
                 self.history.push_back(line.clone());
+                self.history_highlight.push_back(highlighted);
             }
             while self.history.len() > MAX_HISTORY {
                 self.history.pop_front();
+                self.history_highlight.pop_front();
             }
             // Pin the viewport: when scrolled up, compensate for new history
             // lines so the visible content doesn't shift as new output streams in.
@@ -545,20 +569,26 @@ impl TermBuffer {
         let mut spans = Vec::new();
         let mut displayed = Vec::with_capacity(win);
         for (d, idx) in (start..end).enumerate() {
-            let line: &Line = if idx < hist_len {
-                &self.history[idx]
+            let (plain, runs) = if idx < hist_len {
+                // History rows are immutable — use the highlight result cached
+                // at ingest time instead of re-running regex rules every frame.
+                (
+                    self.history[idx].0.as_str(),
+                    self.history_highlight[idx].clone(),
+                )
             } else {
-                &live[idx - hist_len]
+                let line = &live[idx - hist_len];
+                let runs = highlight_plain_output(
+                    line.1.clone(),
+                    self.output_highlight,
+                    &self.custom_highlight_rules,
+                );
+                (line.0.as_str(), runs)
             };
-            let runs = highlight_plain_output(
-                line.1.clone(),
-                self.output_highlight,
-                &self.custom_highlight_rules,
-            );
             for hs in &runs {
                 spans.extend(render_term_span(hs, d as i32, self.is_dark));
             }
-            displayed.push(line.0.trim_end().to_string());
+            displayed.push(plain.trim_end().to_string());
         }
         while displayed.len() < win {
             displayed.push(String::new());

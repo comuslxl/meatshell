@@ -3721,6 +3721,7 @@ fn wire_session_callbacks(
                     sel_focus: None,
                     sel_ranges: Vec::new(),
                     history: VecDeque::new(),
+                    history_highlight: VecDeque::new(),
                     prev: Vec::new(),
                     view_offset: 0,
                     displayed_text: Vec::new(),

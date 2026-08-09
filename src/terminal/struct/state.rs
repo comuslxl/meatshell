@@ -21,6 +21,10 @@ pub(crate) struct TermBuffer {
     pub(crate) sel_focus: Option<(usize, u16)>,
     pub(crate) sel_ranges: Vec<((usize, u16), (usize, u16))>,
     pub(crate) history: VecDeque<Line>,
+    /// Cached highlight output for each history line, computed once at ingest
+    /// time so the scrolled-view render path avoids re-running regex rules on
+    /// immutable content every frame. Kept in lockstep with `history`.
+    pub(crate) history_highlight: VecDeque<Vec<HistSpan>>,
     pub(crate) prev: Vec<Line>,
     pub(crate) view_offset: usize,
     pub(crate) displayed_text: Vec<String>,
