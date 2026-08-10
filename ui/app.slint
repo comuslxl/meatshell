@@ -57,6 +57,8 @@ export struct TerminalState {
     rows-used: int,        // content rows, for viewport sizing
     scroll-max: int,       // scrollback depth (max offset) — terminal scrollbar (#103)
     scroll-offset: int,    // current scrollback offset (0 = live bottom)
+    gutter-timestamps: [string],
+    gutter-first-row: int,
     is-alt-screen: bool,
     find-matches: [TermMatch], // search-highlight rectangles
     selection: [TermMatch],    // drag-selection highlight rectangles
@@ -422,6 +424,10 @@ export component AppWindow inherits Window {
     in-out property <string> output-highlight-preset: "log";
     in property <[OutputRuleItem]> output-highlight-rules;
     in-out property <string> output-highlight-rule-status;
+    in-out property <bool> show-line-numbers: false;
+    in-out property <bool> show-timestamps: false;
+    callback set-show-line-numbers(bool);
+    callback set-show-timestamps(bool);
     in-out property <float> ui-scale <=> Theme.ui-scale;   // global UI zoom (#100)
     in-out property <float> panel-font <=> Theme.panel-font;  // settings-panel font scale
     callback set-panel-font(int);                          // apply + persist (percent)
@@ -1789,6 +1795,10 @@ export component AppWindow inherits Window {
                     rows-used: term.rows-used;
                     scroll-max: term.scroll-max;
                     scroll-offset: term.scroll-offset;
+                    show-line-numbers: root.show-line-numbers;
+                    show-timestamps: root.show-timestamps;
+                    gutter-timestamps: term.gutter-timestamps;
+                    gutter-first-row: term.gutter-first-row;
                     is-alt-screen: term.is-alt-screen;
                     find-matches: term.find-matches;
                     selection: term.selection;
@@ -4235,6 +4245,10 @@ export component AppWindow inherits Window {
                     output-highlight-preset <=> root.output-highlight-preset;
                     output-highlight-rules: root.output-highlight-rules;
                     output-highlight-rule-status <=> root.output-highlight-rule-status;
+                    show-line-numbers <=> root.show-line-numbers;
+                    show-timestamps <=> root.show-timestamps;
+                    set-show-line-numbers(v) => { root.set-show-line-numbers(v); }
+                    set-show-timestamps(v) => { root.set-show-timestamps(v); }
                     ui-scale: root.ui-scale;
                     sftp-follow-cd <=> root.sftp-follow-cd;
                     collapse-sidebar-default <=> root.collapse-sidebar-default;

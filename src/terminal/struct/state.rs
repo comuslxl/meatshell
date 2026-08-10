@@ -25,6 +25,7 @@ pub(crate) struct TermBuffer {
     /// time so the scrolled-view render path avoids re-running regex rules on
     /// immutable content every frame. Kept in lockstep with `history`.
     pub(crate) history_highlight: VecDeque<Vec<HistSpan>>,
+    pub(crate) history_timestamps: VecDeque<String>,
     pub(crate) prev: Vec<Line>,
     pub(crate) view_offset: usize,
     pub(crate) displayed_text: Vec<String>,

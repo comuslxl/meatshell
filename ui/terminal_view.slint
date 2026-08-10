@@ -255,6 +255,16 @@ export component TerminalView inherits Rectangle {
     in property <[TermMatch]> find-matches; // search-highlight rectangles
     in property <[TermMatch]> selection;    // drag-selection highlight rectangles
 
+    // Gutter (line numbers + timestamps)
+    in property <bool> show-line-numbers: false;
+    in property <bool> show-timestamps: false;
+    in property <[string]> gutter-timestamps: [];
+    in property <int> gutter-first-row: 0;
+    property <length> gutter-w:
+        (root.show-line-numbers ? 48px : 0px)
+        + (root.show-timestamps ? 76px : 0px)
+        + (root.show-line-numbers || root.show-timestamps ? 4px : 0px);
+
     in property <string>  sftp-path: "/";
     in property <[SftpEntry]> sftp-entries;
     in property <string>  sftp-status: "";
@@ -556,10 +566,48 @@ export component TerminalView inherits Rectangle {
         // The collapsed bar (sf-h) already reserves the bottom strip now.
         property <length> bottom-strip-h: 0px;
 
-        central := Rectangle {
+        // --- Gutter (line numbers + timestamps) -----------------------------
+        if root.gutter-w > 0px : Rectangle {
             x: root.sftp-dock == "left" ? parent.sf-w + parent.sp : 0px;
             y: root.sftp-dock == "top"  ? parent.sf-h + parent.sp : 0px;
-            width:  root.sftp-horizontal ? parent.width - parent.sf-w - parent.sp : parent.width;
+            width: root.gutter-w;
+            height: root.sftp-horizontal ? parent.height : parent.height - parent.sf-h - parent.sp - parent.bottom-strip-h;
+            background: Theme.bg-panel-alt;
+            clip: true;
+            Rectangle {
+                x: parent.width - 1px; width: 1px; height: parent.height;
+                background: Theme.border-subtle;
+            }
+            VerticalLayout {
+                padding: 0px;
+                for ts[i] in root.gutter-timestamps : HorizontalLayout {
+                    height: root.cell-h;
+                    if root.show-line-numbers : Text {
+                        text: (root.gutter-first-row + i + 1);
+                        color: Theme.text-muted;
+                        font-family: Theme.term-font-family;
+                        font-size: Theme.fs-sm;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        width: root.show-timestamps ? 44px : root.gutter-w - 8px;
+                    }
+                    if root.show-timestamps : Text {
+                        text: ts;
+                        color: Theme.text-muted;
+                        font-family: Theme.term-font-family;
+                        font-size: Theme.fs-sm;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        width: 72px;
+                    }
+                }
+            }
+        }
+
+        central := Rectangle {
+            x: (root.sftp-dock == "left" ? parent.sf-w + parent.sp : 0px) + root.gutter-w;
+            y: root.sftp-dock == "top"  ? parent.sf-h + parent.sp : 0px;
+            width:  (root.sftp-horizontal ? parent.width - parent.sf-w - parent.sp : parent.width) - root.gutter-w;
             height: root.sftp-horizontal ? parent.height : parent.height - parent.sf-h - parent.sp - parent.bottom-strip-h;
             clip: true;
             VerticalLayout {

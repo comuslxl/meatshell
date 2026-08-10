@@ -598,6 +598,8 @@ pub fn run() -> Result<()> {
         window.set_output_highlight_enabled(s.output_highlight_enabled());
         window.set_output_highlight_preset(s.output_highlight_preset().into());
         window.set_output_highlight_rules(output_highlight_rule_model(&s));
+        window.set_show_line_numbers(s.cache.show_line_numbers);
+        window.set_show_timestamps(s.cache.show_timestamps);
         window.set_ui_scale(s.ui_scale() as f32 / 100.0); // global UI zoom (#100)
         window.set_panel_font(s.panel_font() as f32 / 100.0); // settings-panel font scale
         window.set_renderer_mode(s.renderer_mode().into());
@@ -1037,6 +1039,28 @@ pub fn run() -> Result<()> {
             }
             if let Some(w) = weak.upgrade() {
                 apply_output_highlight(&w, &bufs, enabled, &preset);
+            }
+        });
+    }
+    {
+        let weak = window.as_weak();
+        let store = store.clone();
+        window.on_set_show_line_numbers(move |enabled: bool| {
+            store.borrow_mut().cache.show_line_numbers = enabled;
+            let _ = store.borrow_mut().save();
+            if let Some(w) = weak.upgrade() {
+                w.set_show_line_numbers(enabled);
+            }
+        });
+    }
+    {
+        let weak = window.as_weak();
+        let store = store.clone();
+        window.on_set_show_timestamps(move |enabled: bool| {
+            store.borrow_mut().cache.show_timestamps = enabled;
+            let _ = store.borrow_mut().save();
+            if let Some(w) = weak.upgrade() {
+                w.set_show_timestamps(enabled);
             }
         });
     }
@@ -3780,6 +3804,8 @@ fn wire_session_callbacks(
                 rows_used: 0,
                 scroll_max: 0,
                 scroll_offset: 0,
+                gutter_timestamps: ModelRc::from(std::rc::Rc::new(VecModel::<SharedString>::default())),
+                gutter_first_row: 0,
                 is_alt_screen: false,
                 find_matches: ModelRc::from(std::rc::Rc::new(VecModel::<TermMatch>::default())),
                 selection: ModelRc::from(std::rc::Rc::new(VecModel::<TermMatch>::default())),
@@ -3835,6 +3861,7 @@ fn wire_session_callbacks(
                     sel_ranges: Vec::new(),
                     history: VecDeque::new(),
                     history_highlight: VecDeque::new(),
+                    history_timestamps: VecDeque::new(),
                     prev: Vec::new(),
                     view_offset: 0,
                     displayed_text: Vec::new(),
@@ -5032,6 +5059,8 @@ fn wire_key_input(
                     row.rows_used = 0;
                     row.scroll_max = 0;
                     row.scroll_offset = 0;
+                    row.gutter_timestamps = ModelRc::from(std::rc::Rc::new(VecModel::<SharedString>::default()));
+                    row.gutter_first_row = 0;
                 });
             }
             if let Some(h) = handles_clear.borrow().get(&tid) {

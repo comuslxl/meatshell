@@ -366,6 +366,8 @@ export component InterfacePanel inherits Rectangle {
     in-out property <string> output-highlight-preset;
     in property <[OutputRuleItem]> output-highlight-rules;
     in-out property <string> output-highlight-rule-status;
+    in-out property <bool> show-line-numbers: false;
+    in-out property <bool> show-timestamps: false;
     in property <float> ui-scale;
     in-out property <bool> sftp-follow-cd;
     in-out property <bool> collapse-sidebar-default;
@@ -408,6 +410,8 @@ export component InterfacePanel inherits Rectangle {
     callback add-output-highlight-rule(string, bool, bool, bool, string) -> bool;
     callback remove-output-highlight-rule(int);
     callback set-output-highlight-rule-enabled(int, bool);
+    callback set-show-line-numbers(bool);
+    callback set-show-timestamps(bool);
     callback set-ui-scale(int);
     callback set-panel-font(int);   // settings-panel font scale, percent
     callback set-renderer-mode(string);
@@ -634,6 +638,36 @@ export component InterfacePanel inherits Rectangle {
                 spacing: 0;
                 alignment: start;
 
+                SectionHeader { text: root.lang-en ? "TERMINAL MARGINS" : "终端边距"; height: 24px; }
+                SettingRow {
+                    label: root.lang-en ? "Line numbers" : "行号";
+                    desc: root.lang-en
+                        ? "Show absolute line numbers in a left gutter."
+                        : "在左侧边栏显示绝对行号。";
+                    Switch {
+                        on: root.show-line-numbers;
+                        toggled(v) => {
+                            root.show-line-numbers = v;
+                            root.set-show-line-numbers(v);
+                        }
+                    }
+                }
+                SettingRow {
+                    label: root.lang-en ? "Timestamps" : "时间戳";
+                    desc: root.lang-en
+                        ? "Show the time each line was output."
+                        : "显示每行输出的时间。";
+                    show-divider: false;
+                    Switch {
+                        on: root.show-timestamps;
+                        toggled(v) => {
+                            root.show-timestamps = v;
+                            root.set-show-timestamps(v);
+                        }
+                    }
+                }
+
+                Rectangle { height: 18px; }
                 SectionHeader { text: root.lang-en ? "OUTPUT HIGHLIGHTING" : "输出高亮"; height: 24px; }
                 SettingRow {
                     label: root.lang-en ? "Highlight plain terminal output" : "高亮纯文本终端输出";

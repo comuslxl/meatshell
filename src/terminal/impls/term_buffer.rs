@@ -3,6 +3,11 @@ use crate::terminal::{
     highlight_plain_output, render_term_span, BuiltScreen, CsiState, Line, TermBuffer, MAX_HISTORY,
     RAW_CAP,
 };
+
+fn now_timestamp() -> String {
+    use chrono::Local;
+    Local::now().format("%H:%M:%S").to_string()
+}
 use crate::ui::TermMatch;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -347,6 +352,7 @@ impl TermBuffer {
             self.raw.drain(..end);
             self.history.clear();
             self.history_highlight.clear();
+            self.history_timestamps.clear();
             self.prev.clear();
             self.view_offset = 0;
             self.sel_anchor = None;
@@ -409,6 +415,7 @@ impl TermBuffer {
         self.parser = vt100::Parser::new(new_rows, new_cols, 5000);
         self.history.clear();
         self.history_highlight.clear();
+        self.history_timestamps.clear();
         self.prev.clear();
         self.view_offset = 0;
         // Scrollback line count changes, so absolute selection coords no longer map.
@@ -416,6 +423,32 @@ impl TermBuffer {
         self.sel_focus = None;
         self.sel_ranges.clear();
         self.feed_batched(&stream);
+    }
+
+    /// Returns `(first_abs_row, timestamps)` for the current viewport — the
+    /// absolute row index of the top visible row, plus one timestamp string per
+    /// visible row. History rows use the stored timestamp; live-screen rows use
+    /// the current time.
+    pub(crate) fn gutter_data(&self, rows: u16) -> (i32, Vec<String>) {
+        let hist_len = self.history.len();
+        let rows = rows as usize;
+        let combined_len = hist_len + rows;
+        let start = combined_len.saturating_sub(rows + self.view_offset);
+        let mut timestamps = Vec::with_capacity(rows);
+        for i in 0..rows {
+            let idx = start + i;
+            if idx < hist_len {
+                timestamps.push(
+                    self.history_timestamps
+                        .get(idx)
+                        .cloned()
+                        .unwrap_or_default(),
+                );
+            } else {
+                timestamps.push(now_timestamp());
+            }
+        }
+        (start as i32, timestamps)
     }
 
     /// Recompute every cached history highlight from scratch. Call after the
@@ -481,10 +514,12 @@ impl TermBuffer {
                 );
                 self.history.push_back(line.clone());
                 self.history_highlight.push_back(highlighted);
+                self.history_timestamps.push_back(now_timestamp());
             }
             while self.history.len() > MAX_HISTORY {
                 self.history.pop_front();
                 self.history_highlight.pop_front();
+                self.history_timestamps.pop_front();
             }
             // Pin the viewport: when scrolled up, compensate for new history
             // lines so the visible content doesn't shift as new output streams in.

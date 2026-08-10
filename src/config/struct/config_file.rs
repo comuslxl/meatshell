@@ -87,6 +87,10 @@ pub struct ConfigFile {
     /// User-defined rules applied before the selected built-in preset.
     #[serde(default)]
     pub output_highlight_rules: Vec<OutputHighlightRule>,
+    #[serde(default)]
+    pub show_line_numbers: bool,
+    #[serde(default)]
+    pub show_timestamps: bool,
     /// Global UI scale in percent (#100). 0 = default (100%).
     #[serde(default)]
     pub ui_scale: u32,

@@ -28,6 +28,7 @@ fn make_buf(
         sel_ranges: Vec::new(),
         history: history.iter().map(|s| hist_line(s)).collect(),
         history_highlight: std::collections::VecDeque::new(),
+        history_timestamps: std::collections::VecDeque::new(),
         prev: Vec::new(),
         view_offset,
         displayed_text: Vec::new(),

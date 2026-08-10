@@ -176,18 +176,22 @@ pub(super) fn apply_terminal_resize(
 /// Used by scroll + selection callbacks (Output has its own equivalent inline).
 pub(super) fn rebuild_tab_display(win: &AppWindow, bufs: &TermBuffers, tab_id: &str) {
     let data = with_term_buf(bufs, tab_id, |buf| {
-        let cols = buf.parser.screen().size().1;
-        let b = buf.render(); // also refreshes buf.displayed_text
+        let (rows, cols) = buf.parser.screen().size();
+        let b = buf.render();
         let matches = compute_find_matches(&buf.displayed_text, &buf.find_query);
         let sel = buf.selection_rects_visible(cols);
-        (b, matches, sel)
+        let (gfirst, gts) = buf.gutter_data(rows);
+        (b, matches, sel, gfirst, gts)
     });
-    let Some((b, matches, sel)) = data else {
+    let Some((b, matches, sel, gfirst, gts)) = data else {
         return;
     };
     let spans = ModelRc::from(Rc::new(VecModel::from(b.spans)));
     let fm = ModelRc::from(Rc::new(VecModel::from(matches)));
     let sm = ModelRc::from(Rc::new(VecModel::from(sel)));
+    let gm = ModelRc::from(Rc::new(VecModel::from(
+        gts.into_iter().map(SharedString::from).collect::<Vec<_>>(),
+    )));
     let (cr, cc, ru, alt) = (b.cursor_row, b.cursor_col, b.rows_used, b.is_alt);
     let (smax, soff) = (b.scroll_max, b.scroll_offset);
     set_terminal_row(win, tab_id, move |row| {
@@ -200,6 +204,8 @@ pub(super) fn rebuild_tab_display(win: &AppWindow, bufs: &TermBuffers, tab_id: &
         row.selection = sm.clone();
         row.scroll_max = smax;
         row.scroll_offset = soff;
+        row.gutter_timestamps = gm.clone();
+        row.gutter_first_row = gfirst;
     });
     win.window().request_redraw();
 }
