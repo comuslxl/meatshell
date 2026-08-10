@@ -430,6 +430,7 @@ jobs:
         run: |
           set -eu
           VERSION="${GITHUB_REF_NAME:-dev}"
+          VERSION="${VERSION//\//-}"
           STAGE="meatshell-${VERSION}-linux-x86_64-glibc228"
 
           mkdir "$STAGE"
