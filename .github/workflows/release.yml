@@ -127,6 +127,7 @@ jobs:
         run: |
           set -eu
           VERSION="${GITHUB_REF_NAME:-dev}"
+          VERSION="${VERSION//\//-}"
           wget -q -O linuxdeploy \
             https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
           wget -q -O linuxdeploy-plugin-appimage \
@@ -148,6 +149,7 @@ jobs:
         run: |
           set -eu
           VERSION="${GITHUB_REF_NAME:-dev}"
+          VERSION="${VERSION//\//-}"
           STAGE="meatshell-${VERSION}-${{ matrix.name }}"
 
           if [ "${{ runner.os }}" = "macOS" ]; then
@@ -221,7 +223,7 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          $VERSION = "$env:GITHUB_REF_NAME"; if (-not $VERSION) { $VERSION = "dev" }
+          $VERSION = "$env:GITHUB_REF_NAME"; if (-not $VERSION) { $VERSION = "dev" }; $VERSION = $VERSION -replace '/', '-'
           # WiX 3 toolset (candle/light) that cargo-wix drives.
           choco install wixtoolset -y --no-progress
           $candle = Get-ChildItem "C:\Program Files (x86)\WiX Toolset*\bin\candle.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -338,6 +340,7 @@ jobs:
         run: |
           set -eu
           VERSION="${GITHUB_REF_NAME:-dev}"
+          VERSION="${VERSION//\//-}"
           STAGE="meatshell-${VERSION}-linux-aarch64-glibc228"
 
           mkdir "$STAGE"
