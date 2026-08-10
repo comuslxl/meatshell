@@ -802,6 +802,14 @@ pub fn run() -> Result<()> {
     }
     {
         let store = store.clone();
+        window.on_persist_sftp_dock(move |dock| {
+            let mut s = store.borrow_mut();
+            s.set_sftp_dock(dock.to_string());
+            let _ = s.save();
+        });
+    }
+    {
+        let store = store.clone();
         window.on_set_welcome_collapsed(move |v| {
             let mut s = store.borrow_mut();
             s.set_welcome_collapsed(v);
@@ -1065,13 +1073,14 @@ pub fn run() -> Result<()> {
         });
     }
     // Right-click → highlight selected text with a background colour.
+    // Per-terminal: stored in TermBuffer.local_highlight_rules, NOT global config.
     {
         let bufs_hl = bufs.clone();
         let weak = window.as_weak();
-        let store = store.clone();
         window.on_term_highlight_selected(move |tab_id: SharedString, color: SharedString| {
             let tid = tab_id.to_string();
-            let text = with_term_buf(&bufs_hl, &tid, |buf| {
+            let color_str = color.to_string();
+            let pattern = with_term_buf(&bufs_hl, &tid, |buf| {
                 if !buf.selection_has_extent() {
                     return None;
                 }
@@ -1080,34 +1089,53 @@ pub fn run() -> Result<()> {
                 if trimmed.is_empty() { None } else { Some(trimmed) }
             })
             .flatten();
-            let Some(pattern) = text else { return };
-            {
-                let mut s = store.borrow_mut();
-                s.add_output_highlight_rule(OutputHighlightRule {
-                    pattern,
-                    regex: false,
-                    case_sensitive: false,
-                    whole_line: false,
-                    color: String::new(),
-                    bg_color: color.to_string(),
-                    enabled: true,
+            let Some(pattern) = pattern else { return };
+
+            let result_color = with_term_buf(&bufs_hl, &tid, |buf| {
+                let same = buf.local_highlight_rules.iter().any(|r| {
+                    r.bg_color != "" && r.pattern.trim() == pattern && r.bg_color == color_str
                 });
-                let _ = s.save();
+                if same {
+                    buf.local_highlight_rules.retain(|r| {
+                        !(r.bg_color != "" && r.pattern.trim() == pattern && r.bg_color == color_str)
+                    });
+                    String::new()
+                } else {
+                    buf.local_highlight_rules.retain(|r| {
+                        !(r.bg_color != "" && r.pattern.trim() == pattern)
+                    });
+                    buf.local_highlight_rules.push(OutputHighlightRule {
+                        pattern: pattern.clone(),
+                        regex: false,
+                        case_sensitive: false,
+                        whole_line: false,
+                        color: String::new(),
+                        bg_color: color_str.clone(),
+                        enabled: true,
+                    });
+                    color_str.clone()
+                }
+            });
+
+            if let Some(new_color) = result_color {
+                with_term_buf(&bufs_hl, &tid, |buf| {
+                    buf.rebuild_history_highlight_cache();
+                });
                 if let Some(w) = weak.upgrade() {
-                    w.set_output_highlight_rules(output_highlight_rule_model(&s));
-                    apply_custom_output_rules(&w, &bufs_hl, s.output_highlight_rules());
+                    w.set_current_hl_color(SharedString::from(new_color));
+                    rebuild_tab_display(&w, &bufs_hl, &tid);
                 }
             }
         });
     }
     // Right-click → remove highlight for the selected text pattern.
+    // Per-terminal: removes from TermBuffer.local_highlight_rules.
     {
         let bufs_hl = bufs.clone();
         let weak = window.as_weak();
-        let store = store.clone();
         window.on_term_remove_highlight(move |tab_id: SharedString| {
             let tid = tab_id.to_string();
-            let text = with_term_buf(&bufs_hl, &tid, |buf| {
+            let pattern = with_term_buf(&bufs_hl, &tid, |buf| {
                 if !buf.selection_has_extent() {
                     return None;
                 }
@@ -1116,21 +1144,43 @@ pub fn run() -> Result<()> {
                 if trimmed.is_empty() { None } else { Some(trimmed) }
             })
             .flatten();
-            let Some(pattern) = text else { return };
-            {
-                let mut s = store.borrow_mut();
-                let rules: Vec<_> = s
-                    .output_highlight_rules()
-                    .iter()
-                    .filter(|r| !(r.bg_color != "" && r.pattern.trim() == pattern))
-                    .cloned()
-                    .collect();
-                s.cache.output_highlight_rules = rules;
-                let _ = s.save();
-                if let Some(w) = weak.upgrade() {
-                    w.set_output_highlight_rules(output_highlight_rule_model(&s));
-                    apply_custom_output_rules(&w, &bufs_hl, s.output_highlight_rules());
+            let Some(pattern) = pattern else { return };
+
+            with_term_buf(&bufs_hl, &tid, |buf| {
+                buf.local_highlight_rules
+                    .retain(|r| !(r.bg_color != "" && r.pattern.trim() == pattern));
+                buf.rebuild_history_highlight_cache();
+            });
+            if let Some(w) = weak.upgrade() {
+                w.set_current_hl_color(SharedString::from(""));
+                rebuild_tab_display(&w, &bufs_hl, &tid);
+            }
+        });
+    }
+    // Right-click → detect current highlight colour for the selected text pattern.
+    {
+        let bufs_hl = bufs.clone();
+        let weak = window.as_weak();
+        window.on_term_request_hl_check(move |tab_id: SharedString| {
+            let tid = tab_id.to_string();
+            let color = with_term_buf(&bufs_hl, &tid, |buf| {
+                if !buf.selection_has_extent() {
+                    return String::new();
                 }
+                let t = buf.extract_selection_text();
+                let trimmed = t.trim().to_string();
+                if trimmed.is_empty() {
+                    return String::new();
+                }
+                buf.local_highlight_rules
+                    .iter()
+                    .find(|r| r.bg_color != "" && r.pattern.trim() == trimmed)
+                    .map(|r| r.bg_color.clone())
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+            if let Some(w) = weak.upgrade() {
+                w.set_current_hl_color(SharedString::from(color));
             }
         });
     }
@@ -3856,6 +3906,7 @@ fn wire_session_callbacks(
                     is_dark: is_dark_now,
                     output_highlight,
                     custom_highlight_rules,
+                    local_highlight_rules: Vec::new(),
                     sel_anchor: None,
                     sel_focus: None,
                     sel_ranges: Vec::new(),
@@ -5291,7 +5342,7 @@ fn wire_key_input(
         window.on_term_select_word(move |tab_id: SharedString, row: i32, col: i32| {
             let tid = tab_id.to_string();
             let text = with_term_buf(&bufs_sel, &tid, |buf| {
-                let r = row.clamp(0, 0) as u16;
+                let r = row.max(0) as u16;
                 let abs = buf.vis_to_abs(r);
                 let line_idx = r as usize;
                 let line = buf.displayed_text.get(line_idx)?;

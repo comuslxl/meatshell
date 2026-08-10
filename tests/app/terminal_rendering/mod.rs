@@ -23,6 +23,7 @@ fn make_buf(
         is_dark: false,
         output_highlight: OutputHighlightPreset::Log,
         custom_highlight_rules: Vec::new(),
+        local_highlight_rules: Vec::new(),
         sel_anchor: None,
         sel_focus: None,
         sel_ranges: Vec::new(),

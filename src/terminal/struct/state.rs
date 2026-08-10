@@ -1,6 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Condvar, Mutex};
 
+use crate::config::OutputHighlightRule;
 use crate::ui::TermSpan;
 
 #[cfg(any(target_os = "windows", test))]
@@ -17,6 +18,9 @@ pub(crate) struct TermBuffer {
     pub(crate) is_dark: bool,
     pub(crate) output_highlight: OutputHighlightPreset,
     pub(crate) custom_highlight_rules: Vec<CompiledOutputRule>,
+    /// Per-terminal manual highlight rules (right-click highlight).
+    /// NOT stored in global config — these are session-local.
+    pub(crate) local_highlight_rules: Vec<OutputHighlightRule>,
     pub(crate) sel_anchor: Option<(usize, u16)>,
     pub(crate) sel_focus: Option<(usize, u16)>,
     pub(crate) sel_ranges: Vec<((usize, u16), (usize, u16))>,

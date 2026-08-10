@@ -308,6 +308,7 @@ export component AppWindow inherits Window {
         : root.drag-ny > 0.78 ? "bottom"
         : "";
     callback persist-sidebar-dock(string);
+    callback persist-sftp-dock(string);
     // The top-right toolbar icons float over the tab row; when the sidebar docks
     // top/right it covers that corner, so shift the icons to stay over the tabs.
     property <length> toolbar-x-off:
@@ -609,6 +610,7 @@ export component AppWindow inherits Window {
     in-out property <length> sftp-panel-height: 220px; // shared; lets Rust locate the drop zone
     in-out property <length> sftp-panel-width: 380px;  // SFTP extent when docked left/right
     in-out property <string> sftp-dock: "bottom";      // SFTP dock edge, shared across tabs
+    property <bool> sftp-horizontal: root.sftp-dock == "left" || root.sftp-dock == "right";
     callback pick-download-dir();            // open a folder picker
     callback open-download-dir();            // reveal the folder in the OS
     callback clear-transfers();              // wipe the transfer history
@@ -843,6 +845,8 @@ export component AppWindow inherits Window {
     callback term-select-word(string /* tab-id */, int /* row */, int /* col */);
     callback term-highlight-selected(string /* tab-id */, string /* color */);
     callback term-remove-highlight(string /* tab-id */);
+    callback term-request-hl-check(string /* tab-id */);
+    in-out property <string> current-hl-color: "";
     callback term-select-autoscroll(string /* tab-id */, int /* dir */);
 
     // Immersive wallpaper layer — painted behind everything, filling the window.
@@ -1382,6 +1386,18 @@ export component AppWindow inherits Window {
         // The collapsed bar (sb-h) already reserves the bottom strip now.
         property <length> bottom-strip-h: 0px;
 
+        // SFTP panel dimensions at rest level (same pattern as sidebar above).
+        property <bool> sftp-here:
+            !root.active-sftp-collapsed && root.active-sftp-available;
+        property <bool> sftp-horizontal:
+            root.sftp-dock == "left" || root.sftp-dock == "right";
+        property <length> sftp-w:
+            sftp-here ? max(300px, root.sftp-panel-width) : 0px;
+        property <length> sftp-h:
+            sftp-here ? root.sftp-panel-height : 0px;
+        property <length> sftp-sp: sftp-here ? 4px : 0px;
+        property <bool> sftp-resizing: false;
+
         // Left sidebar — collapsible and drag-resizable, dockable to any edge.
         // Only shown while expanded; collapsing swaps it for the ToolStrip icon
         // bar below (mirrors the welcome sidebar), so no clipped widgets bleed
@@ -1536,10 +1552,184 @@ export component AppWindow inherits Window {
             }
         }
 
-        // --- SFTP panel at dock-area level (when docked on the activity bar edge) ---
-        // Renders alongside sidebar/welcome; mutual exclusion ensures only one
-        // of the three is expanded at a time.
-        if dock-area.activity-bar-edge != ""
+        // --- SFTP panel at rest level (same level as sidebar) ---------------
+        // When expanded, renders alongside sidebar; terminal (quick-area) shrinks.
+        if rest.sftp-here : Rectangle {
+            x: root.sftp-dock == "right" ? parent.width - parent.sftp-w : 0px;
+            y: root.sftp-dock == "bottom" ? parent.height - parent.sftp-h : 0px;
+            width: rest.sftp-horizontal ? parent.sftp-w : parent.width;
+            height: rest.sftp-horizontal ? parent.height : parent.sftp-h;
+            background: Theme.bg-panel;
+            clip: true;
+            SftpPanel {
+                width: parent.width;
+                height: parent.height;
+                show-tree: !rest.sftp-horizontal;
+                collapsed: false;
+                compact: false;
+                current-tab-id: root.active-tab-id;
+                current-path: root.active-sftp-path;
+                entries: root.active-sftp-entries;
+                status: root.active-sftp-status;
+                loading: root.active-sftp-loading;
+                tree-nodes: root.active-sftp-tree-nodes;
+                transfer-targets: root.tabs;
+                selected-count: root.active-sftp-selected-count;
+                sort-key: root.active-sftp-sort-key;
+                sort-dir: root.active-sftp-sort-dir;
+                tunnels: root.active-sftp-tunnels;
+                toggle-collapsed => {
+                    root.set-pane-sftp-collapsed(root.active-tab-id, true);
+                }
+                dock-drag-move(ax, ay) => {
+                    root.panel-dragging = true;
+                    root.drag-nx = (ax - dock-area.absolute-position.x) / dock-area.width;
+                    root.drag-ny = (ay - dock-area.absolute-position.y) / dock-area.height;
+                }
+                dock-drag-end() => {
+                    if (root.dock-target != "") {
+                        root.sftp-dock = root.dock-target;
+                        if (root.sidebar-dock == root.dock-target) {
+                            root.sidebar-collapsed = true;
+                            root.set-sidebar-collapsed(true);
+                        }
+                        root.persist-sftp-dock(root.sftp-dock);
+                    }
+                    root.panel-dragging = false;
+                }
+                navigate(path) => { root.sftp-navigate(root.active-tab-id, path); }
+                download(path) => { root.sftp-download(root.active-tab-id, path); }
+                upload-clicked(dir, folder) => { root.sftp-upload-clicked(root.active-tab-id, dir, folder); }
+                refresh(path) => { root.sftp-refresh(root.active-tab-id, path); }
+                tree-expand(path) => { root.sftp-tree-expand(root.active-tab-id, path); }
+                delete(path) => {
+                    root.confirm-delete-tab = root.active-tab-id;
+                    root.confirm-delete-path = path;
+                    root.confirm-delete-open = true;
+                }
+                toggle-select(i) => { root.sftp-toggle-select(root.active-tab-id, i); }
+                download-selected() => { root.sftp-download-selected(root.active-tab-id); }
+                delete-selected() => {
+                    root.confirm-delete-tab = root.active-tab-id;
+                    root.confirm-delete-batch = true;
+                    root.confirm-delete-path = root.lang-en ? "the selected items" : "选中的项目";
+                    root.confirm-delete-open = true;
+                }
+                copy-to-target(path, target) => { root.sftp-copy-to-target(root.active-tab-id, path, target); }
+                copy-selected-to-target(target) => { root.sftp-copy-selected-to-target(root.active-tab-id, target); }
+                view(path) => { root.sftp-view(root.active-tab-id, path); }
+                edit(path) => { root.sftp-edit(root.active-tab-id, path); }
+                open-external(path) => { root.sftp-open-external(root.active-tab-id, path); }
+                edit-external(path) => { root.sftp-edit-external(root.active-tab-id, path); }
+                sort-request(key) => { root.sftp-sort-request(root.active-tab-id, key); }
+                clear-sort() => { root.sftp-clear-sort(root.active-tab-id); }
+                tunnel-add(name, kind, bind, bind-port, host, host-port) => {
+                    root.tunnel-add(root.active-tab-id, name, kind, bind, bind-port, host, host-port);
+                }
+                tunnel-stop(id) => { root.tunnel-stop(root.active-tab-id, id); }
+                rename-request(path, name) => {
+                    root.sftp-prompt-kind = "rename";
+                    root.sftp-prompt-tab = root.active-tab-id;
+                    root.sftp-prompt-target = path;
+                    root.sftp-prompt-value = name;
+                    root.sftp-prompt-open = true;
+                }
+                chmod-request(path, name, mode) => {
+                    root.sftp-chmod-open(root.active-tab-id, path, name, mode);
+                }
+                copy-path(path) => { root.sftp-copy-path(path); }
+                new-folder(dir) => {
+                    root.sftp-prompt-kind = "mkdir";
+                    root.sftp-prompt-tab = root.active-tab-id;
+                    root.sftp-prompt-target = dir;
+                    root.sftp-prompt-value = "";
+                    root.sftp-prompt-open = true;
+                }
+                new-file(dir) => {
+                    root.sftp-prompt-kind = "touch";
+                    root.sftp-prompt-tab = root.active-tab-id;
+                    root.sftp-prompt-target = dir;
+                    root.sftp-prompt-value = "";
+                    root.sftp-prompt-open = true;
+                }
+            }
+        }
+
+        // SFTP resize splitter at rest level (mirrors the sidebar splitter).
+        if rest.sftp-here : Rectangle {
+            x: root.sftp-dock == "left"   ? parent.sftp-w
+             : root.sftp-dock == "right"  ? parent.width - parent.sftp-w - 4px
+             : 0px;
+            y: root.sftp-dock == "top"    ? parent.sftp-h
+             : root.sftp-dock == "bottom" ? parent.height - parent.sftp-h - 4px
+             : 0px;
+            width:  rest.sftp-horizontal ? 4px : parent.width;
+            height: rest.sftp-horizontal ? parent.height : 4px;
+            background: rest-sftp-split-ta.has-hover || rest.sftp-resizing
+                ? Theme.accent : Theme.border-subtle;
+            rest-sftp-split-ta := TouchArea {
+                mouse-cursor: rest.sftp-horizontal ? ew-resize : ns-resize;
+                pointer-event(ev) => {
+                    if (ev.kind == PointerEventKind.down) {
+                        rest.sftp-resizing = true;
+                    } else if (ev.kind == PointerEventKind.up) {
+                        rest.sftp-resizing = false;
+                    }
+                }
+                moved => {
+                    if (rest.sftp-resizing) {
+                        if (rest.sftp-horizontal) {
+                            root.set-pane-sftp-width(root.active-tab-id, clamp(
+                                root.sftp-dock == "right"
+                                    ? dock-area.absolute-position.x + dock-area.width
+                                        - (self.absolute-position.x + self.mouse-x)
+                                    : (self.absolute-position.x + self.mouse-x)
+                                        - dock-area.absolute-position.x,
+                                300px, max(310px, dock-area.width - 200px)));
+                        } else {
+                            root.set-pane-sftp-height(root.active-tab-id, clamp(
+                                root.sftp-dock == "bottom"
+                                    ? dock-area.absolute-position.y + dock-area.height
+                                        - (self.absolute-position.y + self.mouse-y)
+                                    : (self.absolute-position.y + self.mouse-y)
+                                        - dock-area.absolute-position.y,
+                                60px, max(80px, dock-area.height - 80px)));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Drag-to-dock snap overlay for SFTP at rest level.
+        if root.panel-dragging && rest.sftp-here : Rectangle {
+            x: 0; y: 0;
+            width: dock-area.width; height: dock-area.height;
+            Rectangle {
+                x: dock-area.absolute-position.x - rest.absolute-position.x;
+                y: dock-area.absolute-position.y - rest.absolute-position.y;
+                width: dock-area.width; height: dock-area.height;
+                Rectangle {
+                    x: 0; y: 0; width: parent.width * 0.22; height: parent.height;
+                    background: root.dock-target == "left" ? Theme.accent.with-alpha(0.35) : Theme.accent.with-alpha(0.10);
+                }
+                Rectangle {
+                    x: parent.width * 0.78; y: 0; width: parent.width * 0.22; height: parent.height;
+                    background: root.dock-target == "right" ? Theme.accent.with-alpha(0.35) : Theme.accent.with-alpha(0.10);
+                }
+                Rectangle {
+                    x: 0; y: 0; width: parent.width; height: parent.height * 0.22;
+                    background: root.dock-target == "top" ? Theme.accent.with-alpha(0.35) : Theme.accent.with-alpha(0.10);
+                }
+                Rectangle {
+                    x: 0; y: parent.height * 0.78; width: parent.width; height: parent.height * 0.22;
+                    background: root.dock-target == "bottom" ? Theme.accent.with-alpha(0.35) : Theme.accent.with-alpha(0.10);
+                }
+            }
+        }
+
+        // --- SFTP panel at dock-area level (DEAD CODE: replaced by rest-level SFTP) ---
+        // Kept for reference; condition is always false.
+        if false
             && root.sftp-dock == dock-area.activity-bar-edge
             && !root.active-sftp-collapsed
             && root.active-sftp-available : Rectangle {
@@ -1650,10 +1840,17 @@ export component AppWindow inherits Window {
         // panel can never bleed (visually or for clicks) onto a panel docked on
         // the bottom or right (#dock).
         quick-area := Rectangle {
-            x: root.sidebar-dock == "left" ? parent.sb-w + parent.sp : 0px;
-            y: root.sidebar-dock == "top"  ? parent.sb-h + parent.sp : 0px;
-            width:  root.sidebar-horizontal ? parent.width - parent.sb-w - parent.sp : parent.width;
-            height: root.sidebar-horizontal ? parent.height : parent.height - parent.sb-h - parent.sp - parent.bottom-strip-h;
+            x: (root.sidebar-dock == "left" ? parent.sb-w + parent.sp : 0px)
+             + (root.sftp-dock == "left" ? parent.sftp-w + parent.sftp-sp : 0px);
+            y: (root.sidebar-dock == "top"  ? parent.sb-h + parent.sp : 0px)
+             + (root.sftp-dock == "top" ? parent.sftp-h + parent.sftp-sp : 0px);
+            width:  parent.width
+                - (root.sidebar-horizontal ? parent.sb-w + parent.sp : 0px)
+                - (root.sftp-horizontal ? parent.sftp-w + parent.sftp-sp : 0px);
+            height: parent.height
+                - (!root.sidebar-horizontal ? parent.sb-h + parent.sp : 0px)
+                - (!root.sftp-horizontal ? parent.sftp-h + parent.sftp-sp : 0px)
+                - parent.bottom-strip-h;
             clip: true;
             property <bool> quick-horizontal:
                 root.quick-panel-dock == "left" || root.quick-panel-dock == "right";
@@ -1808,8 +2005,7 @@ export component AppWindow inherits Window {
                     set-sftp-panel-width(v) => { root.set-pane-sftp-width(term.id, v); }
                     sftp-dock <=> root.sftp-dock;
                     sftp-collapsed: term.sftp-collapsed;
-                    sftp-hidden: dock-area.activity-bar-edge != ""
-                        && root.sftp-dock == dock-area.activity-bar-edge;
+                    sftp-hidden: true;
                     set-sftp-collapsed(v) => { root.set-pane-sftp-collapsed(term.id, v); }
                     sftp-saved-height: term.sftp-saved-height;
                     set-sftp-saved-height(v) => { root.set-pane-sftp-saved-height(term.id, v); }
@@ -1950,6 +2146,8 @@ export component AppWindow inherits Window {
                     select-word(r, c) => { root.term-select-word(term.id, r, c); }
                     highlight-selected(color) => { root.term-highlight-selected(term.id, color); }
                     remove-highlight() => { root.term-remove-highlight(term.id); }
+                    current-hl-color: root.current-hl-color;
+                    request-hl-check() => { root.term-request-hl-check(term.id); }
                     select-autoscroll(dir) => { root.term-select-autoscroll(term.id, dir); }
                 }
 

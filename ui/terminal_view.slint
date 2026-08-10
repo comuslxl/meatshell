@@ -383,6 +383,8 @@ export component TerminalView inherits Rectangle {
     callback select-word(int, int);         // double-click word select at (row, col)
     callback highlight-selected(string);    // bg-highlight selected text with color
     callback remove-highlight();            // remove bg-highlight for selected text
+    in-out property <string> current-hl-color: "";
+    callback request-hl-check();
 
     // Right-click context-menu anchor + find-bar visibility (private UI state).
     property <length> ctx-x;
@@ -543,6 +545,19 @@ export component TerminalView inherits Rectangle {
                     font-size: Theme.fs-xs;
                     vertical-alignment: center;
                 }
+                if root.sftp-available : Rectangle {
+                    width: 24px; height: 20px;
+                    TouchArea {
+                        clicked => { root.set-sftp-collapsed(!root.sftp-collapsed); }
+                    }
+                    Text {
+                        text: "\u{E2BA}";
+                        color: root.sftp-collapsed ? Theme.text-muted : Theme.accent;
+                        font-size: Theme.fs-sm;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                }
             }
         }
 
@@ -697,6 +712,7 @@ export component TerminalView inherits Rectangle {
                                     if (ev.button == PointerEventButton.right) {
                                         root.ctx-x = self.mouse-x;
                                         root.ctx-y = self.mouse-y;
+                                        root.request-hl-check();
                                         ctx-menu.show();
                                     } else if (ev.button == PointerEventButton.left) {
                                         root.selecting = true;
@@ -947,7 +963,7 @@ export component TerminalView inherits Rectangle {
                                         clicked => { root.find-active = true; }
                                     }
                                     if root.selection.length > 0 : Rectangle {
-                                        height: 68px;
+                                        height: 56px;
                                         VerticalLayout {
                                             padding: 4px;
                                             spacing: 4px;
@@ -958,45 +974,87 @@ export component TerminalView inherits Rectangle {
                                                 font-size: Theme.fs-sm;
                                             }
                                             HorizontalLayout {
-                                                spacing: 4px;
+                                                spacing: 6px;
                                                 Rectangle {
-                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    width: 14px; height: 14px; border-radius: 7px;
                                                     background: #8b3636;
+                                                    if root.current-hl-color == "red" : Text {
+                                                        text: "\u{2713}";
+                                                        color: white;
+                                                        font-size: 10px;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                    }
                                                     hl-ta-red := TouchArea {
                                                         clicked => { root.highlight-selected("red"); ctx-menu.close(); }
                                                     }
                                                 }
                                                 Rectangle {
-                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    width: 14px; height: 14px; border-radius: 7px;
                                                     background: #8b7530;
+                                                    if root.current-hl-color == "yellow" : Text {
+                                                        text: "\u{2713}";
+                                                        color: white;
+                                                        font-size: 10px;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                    }
                                                     hl-ta-yellow := TouchArea {
                                                         clicked => { root.highlight-selected("yellow"); ctx-menu.close(); }
                                                     }
                                                 }
                                                 Rectangle {
-                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    width: 14px; height: 14px; border-radius: 7px;
                                                     background: #2d6b2d;
+                                                    if root.current-hl-color == "green" : Text {
+                                                        text: "\u{2713}";
+                                                        color: white;
+                                                        font-size: 10px;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                    }
                                                     hl-ta-green := TouchArea {
                                                         clicked => { root.highlight-selected("green"); ctx-menu.close(); }
                                                     }
                                                 }
                                                 Rectangle {
-                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    width: 14px; height: 14px; border-radius: 7px;
                                                     background: #2d5d6b;
+                                                    if root.current-hl-color == "cyan" : Text {
+                                                        text: "\u{2713}";
+                                                        color: white;
+                                                        font-size: 10px;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                    }
                                                     hl-ta-cyan := TouchArea {
                                                         clicked => { root.highlight-selected("cyan"); ctx-menu.close(); }
                                                     }
                                                 }
                                                 Rectangle {
-                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    width: 14px; height: 14px; border-radius: 7px;
                                                     background: #6b2d6b;
+                                                    if root.current-hl-color == "magenta" : Text {
+                                                        text: "\u{2713}";
+                                                        color: white;
+                                                        font-size: 10px;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                    }
                                                     hl-ta-magenta := TouchArea {
                                                         clicked => { root.highlight-selected("magenta"); ctx-menu.close(); }
                                                     }
                                                 }
                                                 Rectangle {
-                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    width: 14px; height: 14px; border-radius: 7px;
                                                     background: #8b5a2d;
+                                                    if root.current-hl-color == "orange" : Text {
+                                                        text: "\u{2713}";
+                                                        color: white;
+                                                        font-size: 10px;
+                                                        horizontal-alignment: center;
+                                                        vertical-alignment: center;
+                                                    }
                                                     hl-ta-orange := TouchArea {
                                                         clicked => { root.highlight-selected("orange"); ctx-menu.close(); }
                                                     }

@@ -1,7 +1,7 @@
 use crate::terminal::{
-    build_row, cell_prefix, char_after_cell_end, char_at_cell_start, detect_scroll,
-    highlight_plain_output, render_term_span, BuiltScreen, CsiState, Line, TermBuffer, MAX_HISTORY,
-    RAW_CAP,
+    build_row, cell_prefix, char_after_cell_end, char_at_cell_start, compile_output_rules,
+    detect_scroll, highlight_plain_output, render_term_span, BuiltScreen, CompiledOutputRule,
+    CsiState, Line, TermBuffer, MAX_HISTORY, RAW_CAP,
 };
 
 fn now_timestamp() -> String {
@@ -29,6 +29,18 @@ fn terminal_query(sequence: &[u8]) -> Option<TerminalQuery> {
 
 impl TermBuffer {
     // ---- Absolute-coordinate selection helpers (#18 follow-up) -------------
+
+    fn effective_compiled_rules(&self) -> Vec<CompiledOutputRule> {
+        if self.local_highlight_rules.is_empty() {
+            return self.custom_highlight_rules.clone();
+        }
+        let mut all = self.custom_highlight_rules.clone();
+        for chunk in self.local_highlight_rules.chunks(32) {
+            all.extend(compile_output_rules(chunk));
+        }
+        all
+    }
+
     //
     // The "combined" buffer is `history` (oldest first) followed by the live
     // screen rows.  A visible window of `rows` rows looks at a slice of it whose
@@ -456,12 +468,10 @@ impl TermBuffer {
     /// cached results computed under the old configuration are stale.
     pub(crate) fn rebuild_history_highlight_cache(&mut self) {
         self.history_highlight.clear();
+        let rules = self.effective_compiled_rules();
         for line in &self.history {
-            let highlighted = highlight_plain_output(
-                line.1.clone(),
-                self.output_highlight,
-                &self.custom_highlight_rules,
-            );
+            let highlighted =
+                highlight_plain_output(line.1.clone(), self.output_highlight, &rules);
             self.history_highlight.push_back(highlighted);
         }
     }
@@ -506,12 +516,10 @@ impl TermBuffer {
         };
         if !self.prev.is_empty() {
             let k = detect_scroll(&self.prev, &curr);
+            let rules = self.effective_compiled_rules();
             for line in self.prev.iter().take(k) {
-                let highlighted = highlight_plain_output(
-                    line.1.clone(),
-                    self.output_highlight,
-                    &self.custom_highlight_rules,
-                );
+                let highlighted =
+                    highlight_plain_output(line.1.clone(), self.output_highlight, &rules);
                 self.history.push_back(line.clone());
                 self.history_highlight.push_back(highlighted);
                 self.history_timestamps.push_back(now_timestamp());
@@ -548,16 +556,13 @@ impl TermBuffer {
             let mut displayed = Vec::with_capacity(rows as usize);
             let mut last_content = 0i32;
             let s = self.parser.screen();
+            let rules = self.effective_compiled_rules();
             for r in 0..rows {
                 let (plain, runs, _wrapped) = build_row(s, r, cols);
                 let runs = if is_alt {
                     runs
                 } else {
-                    highlight_plain_output(
-                        runs,
-                        self.output_highlight,
-                        &self.custom_highlight_rules,
-                    )
+                    highlight_plain_output(runs, self.output_highlight, &rules)
                 };
                 if !runs.is_empty() {
                     last_content = r as i32;
@@ -589,6 +594,7 @@ impl TermBuffer {
             let s = self.parser.screen();
             (0..rows).map(|r| build_row(s, r, cols)).collect()
         };
+        let rules = self.effective_compiled_rules();
         let hist_len = self.history.len();
         // Include the screen's trailing blank rows in the scroll range so this
         // scrolled view stays continuous with the live view (view_offset 0).
@@ -616,7 +622,7 @@ impl TermBuffer {
                 let runs = highlight_plain_output(
                     line.1.clone(),
                     self.output_highlight,
-                    &self.custom_highlight_rules,
+                    &rules,
                 );
                 (line.0.as_str(), runs)
             };
