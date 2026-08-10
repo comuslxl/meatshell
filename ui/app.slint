@@ -523,7 +523,7 @@ export component AppWindow inherits Window {
     // Welcome sidebar collapsed to the edge icon strip (IDEA-style), persisted.
     in-out property <bool> welcome-collapsed: false;
     callback set-welcome-collapsed(bool);          // apply + persist
-    in-out property <bool> collapse-sftp-default: false;
+    in-out property <bool> collapse-sftp-default: true;
     callback set-collapse-sftp-default(bool);      // apply + persist
     in-out property <bool> sftp-collapsed: false;       // (legacy global; per-tab now)
     in-out property <bool> active-sftp-collapsed: true; // active tab's SFTP state (activity bar)
@@ -957,6 +957,13 @@ export component AppWindow inherits Window {
         // on top). Swapped by dragging one icon onto the other's slot.
         property <bool> activity-welcome-first: false;
         property <string> activity-drag-panel: "";
+        // 3-way icon ordering. Each slot-N holds the panel id currently
+        // displayed at that position ("sidebar" / "welcome" / "sftp").
+        // Dragging any icon onto another slot swaps the two slots so the
+        // SFTP icon can be reordered alongside the other two (#328).
+        property <string> activity-slot-0: "sidebar";
+        property <string> activity-slot-1: "welcome";
+        property <string> activity-slot-2: "sftp";
         // A collapsed quick-command sidebar joins an existing collapsed strip
         // on the same edge. Only when no such strip exists does it reserve its
         // own outermost 36px slot (#215).
@@ -1027,16 +1034,40 @@ export component AppWindow inherits Window {
             drag-enabled: true;
             show-second: true;
             show-third: true;
-            // Dynamic icon bindings swap when the user reorders.
-            glyph: dock-area.activity-welcome-first ? "\u{E88A}" : "\u{E871}";
-            second-glyph: dock-area.activity-welcome-first ? "\u{E871}" : "\u{E88A}";
-            third-glyph: "\u{E2C8}";   // folder — SFTP
-            active: dock-area.activity-welcome-first ? !root.welcome-collapsed : !root.sidebar-collapsed;
-            active-second: dock-area.activity-welcome-first ? !root.sidebar-collapsed : !root.welcome-collapsed;
-            active-third: !root.active-sftp-collapsed && root.sftp-dock == dock-area.activity-bar-edge;
-            drag-id: dock-area.activity-welcome-first ? "welcome" : "sidebar";
-            second-drag-id: dock-area.activity-welcome-first ? "sidebar" : "welcome";
-            third-drag-id: "sftp";
+            // Dynamic icon bindings: each slot displays whichever panel id is
+            // currently assigned to it (sidebar / welcome / sftp). All three
+            // slots are reorderable; dragging an icon onto another slot swaps
+            // the two slots.
+            glyph:
+                dock-area.activity-slot-0 == "welcome" ? "\u{E88A}"
+                : dock-area.activity-slot-0 == "sftp" ? "\u{E2C8}"
+                : "\u{E871}";   // sidebar
+            second-glyph:
+                dock-area.activity-slot-1 == "welcome" ? "\u{E88A}"
+                : dock-area.activity-slot-1 == "sftp" ? "\u{E2C8}"
+                : "\u{E871}";   // sidebar
+            third-glyph:
+                dock-area.activity-slot-2 == "welcome" ? "\u{E88A}"
+                : dock-area.activity-slot-2 == "sftp" ? "\u{E2C8}"
+                : "\u{E871}";   // sidebar
+            active:
+                dock-area.activity-slot-0 == "welcome" ? !root.welcome-collapsed
+                : dock-area.activity-slot-0 == "sftp"
+                    ? (!root.active-sftp-collapsed && root.sftp-dock == dock-area.activity-bar-edge)
+                : !root.sidebar-collapsed;
+            active-second:
+                dock-area.activity-slot-1 == "welcome" ? !root.welcome-collapsed
+                : dock-area.activity-slot-1 == "sftp"
+                    ? (!root.active-sftp-collapsed && root.sftp-dock == dock-area.activity-bar-edge)
+                : !root.sidebar-collapsed;
+            active-third:
+                dock-area.activity-slot-2 == "welcome" ? !root.welcome-collapsed
+                : dock-area.activity-slot-2 == "sftp"
+                    ? (!root.active-sftp-collapsed && root.sftp-dock == dock-area.activity-bar-edge)
+                : !root.sidebar-collapsed;
+            drag-id: dock-area.activity-slot-0;
+            second-drag-id: dock-area.activity-slot-1;
+            third-drag-id: dock-area.activity-slot-2;
             icon-drag-start(panel-id) => {
                 dock-area.activity-drag-panel = panel-id;
             }
@@ -1045,12 +1076,10 @@ export component AppWindow inherits Window {
                 root.drag-nx = (ax - dock-area.absolute-position.x) / dock-area.width;
                 root.drag-ny = (ay - dock-area.absolute-position.y) / dock-area.height;
                 // Real-time icon sorting (VSCode-style): swap icon positions
-                // as the cursor crosses the bar's midpoint, without waiting
+                // as the cursor crosses another icon's center, without waiting
                 // for release. Only when staying at the same edge.
                 if (dock-area.activity-drag-panel != ""
                     && root.dock-target == dock-area.activity-bar-edge) {
-                    // General slot computation: derive positions from icon
-                    // layout constants, not hardcoded pixel values.
                     // Icon layout: 30px icons, 4px gap → stride=34px,
                     // first center at 4+15=19px from bar edge.
                     let icon-stride = 34px;
@@ -1058,18 +1087,46 @@ export component AppWindow inherits Window {
                     let rel = dock-area.activity-bar-horizontal
                         ? ax - ab.absolute-position.x
                         : ay - ab.absolute-position.y;
-                    let dragged-pos = dock-area.activity-drag-panel == "sidebar"
-                        ? (dock-area.activity-welcome-first ? 1 : 0)
-                        : (dock-area.activity-welcome-first ? 0 : 1);
-                    // Target slot center: the other icon's center position
-                    let target-center = dragged-pos == 0
-                        ? icon-first-center + icon-stride
-                        : icon-first-center;
-                    // VSCode-style: swap only when cursor crosses the target
-                    // icon's CENTER, not the gap boundary.
-                    if ((dragged-pos == 0 && rel > target-center)
-                        || (dragged-pos == 1 && rel < target-center)) {
-                        dock-area.activity-welcome-first = !dock-area.activity-welcome-first;
+                    // dragged-slot: which slot index currently holds the
+                    // dragged panel id.
+                    let dragged-id = dock-area.activity-drag-panel;
+                    let dragged-slot =
+                        dock-area.activity-slot-0 == dragged-id ? 0
+                        : dock-area.activity-slot-1 == dragged-id ? 1
+                        : 2;
+                    // Cursor's slot: which slot index the cursor is over.
+                    // Slot N occupies [first-center + (N-0.5)*stride, first-center + (N+0.5)*stride]
+                    // i.e. boundaries at first-center - 0.5*stride + N*stride.
+                    let cursor-rel = rel - (icon-first-center - icon-stride / 2);
+                    let cursor-slot = clamp(floor(cursor-rel / icon-stride), 0, 2);
+                    if (cursor-slot != dragged-slot) {
+                        // Swap the two slot-N panel ids in place. Each branch
+                        // moves each SharedString exactly once (no Copy).
+                        if (dragged-slot == 0 && cursor-slot == 1) {
+                            let tmp = dock-area.activity-slot-0;
+                            dock-area.activity-slot-0 = dock-area.activity-slot-1;
+                            dock-area.activity-slot-1 = tmp;
+                        } else if (dragged-slot == 0 && cursor-slot == 2) {
+                            let tmp = dock-area.activity-slot-0;
+                            dock-area.activity-slot-0 = dock-area.activity-slot-2;
+                            dock-area.activity-slot-2 = tmp;
+                        } else if (dragged-slot == 1 && cursor-slot == 0) {
+                            let tmp = dock-area.activity-slot-1;
+                            dock-area.activity-slot-1 = dock-area.activity-slot-0;
+                            dock-area.activity-slot-0 = tmp;
+                        } else if (dragged-slot == 1 && cursor-slot == 2) {
+                            let tmp = dock-area.activity-slot-1;
+                            dock-area.activity-slot-1 = dock-area.activity-slot-2;
+                            dock-area.activity-slot-2 = tmp;
+                        } else if (dragged-slot == 2 && cursor-slot == 0) {
+                            let tmp = dock-area.activity-slot-2;
+                            dock-area.activity-slot-2 = dock-area.activity-slot-0;
+                            dock-area.activity-slot-0 = tmp;
+                        } else if (dragged-slot == 2 && cursor-slot == 1) {
+                            let tmp = dock-area.activity-slot-2;
+                            dock-area.activity-slot-2 = dock-area.activity-slot-1;
+                            dock-area.activity-slot-1 = tmp;
+                        }
                     }
                 }
             }
@@ -1102,7 +1159,7 @@ export component AppWindow inherits Window {
                 dock-area.activity-drag-panel = "";
             }
             expand => {
-                if (dock-area.activity-welcome-first) {
+                if (dock-area.activity-slot-0 == "welcome") {
                     root.welcome-collapsed = !root.welcome-collapsed;
                     root.set-welcome-collapsed(root.welcome-collapsed);
                     if (!root.welcome-collapsed) {
@@ -1111,6 +1168,17 @@ export component AppWindow inherits Window {
                         if (root.quick-panel-open && root.quick-panel-dock == dock-area.activity-bar-edge) {
                             root.quick-panel-collapsed = true;
                         }
+                        root.set-pane-sftp-collapsed(root.active-tab-id, true);
+                    }
+                } else if (dock-area.activity-slot-0 == "sftp") {
+                    if (root.active-sftp-collapsed || root.sftp-dock != dock-area.activity-bar-edge) {
+                        root.sftp-dock = dock-area.activity-bar-edge;
+                        root.set-pane-sftp-collapsed(root.active-tab-id, false);
+                        root.sidebar-collapsed = true;
+                        root.set-sidebar-collapsed(true);
+                        root.welcome-collapsed = true;
+                        root.set-welcome-collapsed(true);
+                    } else {
                         root.set-pane-sftp-collapsed(root.active-tab-id, true);
                     }
                 } else {
@@ -1127,7 +1195,54 @@ export component AppWindow inherits Window {
                 }
             }
             expand-second => {
-                if (dock-area.activity-welcome-first) {
+                if (dock-area.activity-slot-1 == "welcome") {
+                    root.welcome-collapsed = !root.welcome-collapsed;
+                    root.set-welcome-collapsed(root.welcome-collapsed);
+                    if (!root.welcome-collapsed) {
+                        root.sidebar-collapsed = true;
+                        root.set-sidebar-collapsed(true);
+                        if (root.quick-panel-open && root.quick-panel-dock == dock-area.activity-bar-edge) {
+                            root.quick-panel-collapsed = true;
+                        }
+                        root.set-pane-sftp-collapsed(root.active-tab-id, true);
+                    }
+                } else if (dock-area.activity-slot-1 == "sftp") {
+                    if (root.active-sftp-collapsed || root.sftp-dock != dock-area.activity-bar-edge) {
+                        root.sftp-dock = dock-area.activity-bar-edge;
+                        root.set-pane-sftp-collapsed(root.active-tab-id, false);
+                        root.sidebar-collapsed = true;
+                        root.set-sidebar-collapsed(true);
+                        root.welcome-collapsed = true;
+                        root.set-welcome-collapsed(true);
+                    } else {
+                        root.set-pane-sftp-collapsed(root.active-tab-id, true);
+                    }
+                } else {
+                    root.sidebar-collapsed = !root.sidebar-collapsed;
+                    root.set-sidebar-collapsed(root.sidebar-collapsed);
+                    if (!root.sidebar-collapsed) {
+                        root.welcome-collapsed = true;
+                        root.set-welcome-collapsed(true);
+                        if (root.quick-panel-open && root.quick-panel-dock == dock-area.activity-bar-edge) {
+                            root.quick-panel-collapsed = true;
+                        }
+                        root.set-pane-sftp-collapsed(root.active-tab-id, true);
+                    }
+                }
+            }
+            expand-third => {
+                if (dock-area.activity-slot-2 == "welcome") {
+                    root.welcome-collapsed = !root.welcome-collapsed;
+                    root.set-welcome-collapsed(root.welcome-collapsed);
+                    if (!root.welcome-collapsed) {
+                        root.sidebar-collapsed = true;
+                        root.set-sidebar-collapsed(true);
+                        if (root.quick-panel-open && root.quick-panel-dock == dock-area.activity-bar-edge) {
+                            root.quick-panel-collapsed = true;
+                        }
+                        root.set-pane-sftp-collapsed(root.active-tab-id, true);
+                    }
+                } else if (dock-area.activity-slot-2 == "sidebar") {
                     root.sidebar-collapsed = !root.sidebar-collapsed;
                     root.set-sidebar-collapsed(root.sidebar-collapsed);
                     if (!root.sidebar-collapsed) {
@@ -1139,28 +1254,16 @@ export component AppWindow inherits Window {
                         root.set-pane-sftp-collapsed(root.active-tab-id, true);
                     }
                 } else {
-                    root.welcome-collapsed = !root.welcome-collapsed;
-                    root.set-welcome-collapsed(root.welcome-collapsed);
-                    if (!root.welcome-collapsed) {
+                    if (root.active-sftp-collapsed || root.sftp-dock != dock-area.activity-bar-edge) {
+                        root.sftp-dock = dock-area.activity-bar-edge;
+                        root.set-pane-sftp-collapsed(root.active-tab-id, false);
                         root.sidebar-collapsed = true;
                         root.set-sidebar-collapsed(true);
-                        if (root.quick-panel-open && root.quick-panel-dock == dock-area.activity-bar-edge) {
-                            root.quick-panel-collapsed = true;
-                        }
+                        root.welcome-collapsed = true;
+                        root.set-welcome-collapsed(true);
+                    } else {
                         root.set-pane-sftp-collapsed(root.active-tab-id, true);
                     }
-                }
-            }
-            expand-third => {
-                if (root.active-sftp-collapsed || root.sftp-dock != dock-area.activity-bar-edge) {
-                    root.sftp-dock = dock-area.activity-bar-edge;
-                    root.set-pane-sftp-collapsed(root.active-tab-id, false);
-                    root.sidebar-collapsed = true;
-                    root.set-sidebar-collapsed(true);
-                    root.welcome-collapsed = true;
-                    root.set-welcome-collapsed(true);
-                } else {
-                    root.set-pane-sftp-collapsed(root.active-tab-id, true);
                 }
             }
         }

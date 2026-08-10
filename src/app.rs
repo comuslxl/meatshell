@@ -5341,11 +5341,22 @@ fn wire_key_input(
         let weak = window.as_weak();
         window.on_term_select_word(move |tab_id: SharedString, row: i32, col: i32| {
             let tid = tab_id.to_string();
+            tracing::info!(target: "term_select_word", tab=%tid, row, col, "select_word invoked");
             let text = with_term_buf(&bufs_sel, &tid, |buf| {
                 let r = row.max(0) as u16;
                 let abs = buf.vis_to_abs(r);
                 let line_idx = r as usize;
+                tracing::info!(
+                    target: "term_select_word",
+                    tab=%tid,
+                    visible_row=r,
+                    abs_row=abs,
+                    displayed_len=buf.displayed_text.len(),
+                    line_idx,
+                    "select_word: looking up displayed_text",
+                );
                 let line = buf.displayed_text.get(line_idx)?;
+                tracing::info!(target: "term_select_word", tab=%tid, line_text=%line, "select_word: line content");
                 let chars: Vec<char> = line.chars().collect();
                 if chars.is_empty() {
                     return None;

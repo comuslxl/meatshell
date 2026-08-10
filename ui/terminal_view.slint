@@ -391,6 +391,14 @@ export component TerminalView inherits Rectangle {
     property <length> ctx-y;
     property <bool> find-active: false;
     property <bool> selecting: false;
+    // Guards the result of double-click word selection from being cleared by
+    // the subsequent pointer-event(up) → select-end. Slint's double-clicked
+    // callback fires on the second click release; depending on platform the
+    // ordering vs. pointer-event(up) is not guaranteed, so select-end could
+    // run after select-word and wipe the just-set range when the click landed
+    // with no drag (anchor == focus before select-word ran). The flag is set
+    // in double-clicked and consumed by the next left-up.
+    property <bool> word-just-selected: false;
     // Auto-scroll direction while drag-selecting past the visible edge.
     // 0 = none, -1 = above top (scroll to older), +1 = below bottom (newer).
     property <int> autoscroll-dir: 0;
@@ -730,7 +738,13 @@ export component TerminalView inherits Rectangle {
                                             && root.selecting) {
                                         root.selecting = false;
                                         root.autoscroll-dir = 0;
-                                        root.select-end();
+                                        // If a double-click word selection just ran,
+                                        // skip the clear-on-release path so the word
+                                        // stays highlighted.
+                                        if (!root.word-just-selected) {
+                                            root.select-end();
+                                        }
+                                        root.word-just-selected = false;
                                     }
                                 }
                             }
@@ -782,6 +796,9 @@ export component TerminalView inherits Rectangle {
                                 root.select-word(
                                     floor(self.mouse-y / root.cell-h),
                                     floor(self.mouse-x / root.cell-w));
+                                // Prevent the next pointer-event(up) → select-end
+                                // from clearing the word selection.
+                                root.word-just-selected = true;
                             }
                         }
 
@@ -896,7 +913,13 @@ export component TerminalView inherits Rectangle {
                                             && root.selecting) {
                                         root.selecting = false;
                                         root.autoscroll-dir = 0;
-                                        root.select-end();
+                                        // If a double-click word selection just ran,
+                                        // skip the clear-on-release path so the word
+                                        // stays highlighted.
+                                        if (!root.word-just-selected) {
+                                            root.select-end();
+                                        }
+                                        root.word-just-selected = false;
                                     }
                                 }
                             }
