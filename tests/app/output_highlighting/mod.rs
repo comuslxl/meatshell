@@ -25,6 +25,7 @@ fn custom_rule(
         case_sensitive,
         whole_line,
         color: color.to_string(),
+        bg_color: String::new(),
         enabled: true,
     }])
     .pop()

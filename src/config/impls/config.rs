@@ -1804,6 +1804,7 @@ mod tests {
             case_sensitive: false,
             whole_line: true,
             color: "unknown".to_string(),
+            bg_color: String::new(),
             enabled: true,
         });
         assert_eq!(store.output_highlight_rules().len(), 1);

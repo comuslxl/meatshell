@@ -26,9 +26,10 @@ pub struct OutputHighlightRule {
     pub case_sensitive: bool,
     #[serde(default)]
     pub whole_line: bool,
-    /// Stable palette id: red | yellow | green | cyan | magenta | gray.
     #[serde(default)]
     pub color: String,
+    #[serde(default)]
+    pub bg_color: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
 }

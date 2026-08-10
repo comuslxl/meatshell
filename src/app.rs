@@ -967,6 +967,7 @@ pub fn run() -> Result<()> {
                         case_sensitive,
                         whole_line,
                         color: color.to_string(),
+                        bg_color: String::new(),
                         enabled: true,
                     });
                     let _ = s.save();
@@ -1036,6 +1037,76 @@ pub fn run() -> Result<()> {
             }
             if let Some(w) = weak.upgrade() {
                 apply_output_highlight(&w, &bufs, enabled, &preset);
+            }
+        });
+    }
+    // Right-click → highlight selected text with a background colour.
+    {
+        let bufs_hl = bufs.clone();
+        let weak = window.as_weak();
+        let store = store.clone();
+        window.on_term_highlight_selected(move |tab_id: SharedString, color: SharedString| {
+            let tid = tab_id.to_string();
+            let text = with_term_buf(&bufs_hl, &tid, |buf| {
+                if !buf.selection_has_extent() {
+                    return None;
+                }
+                let t = buf.extract_selection_text();
+                let trimmed = t.trim().to_string();
+                if trimmed.is_empty() { None } else { Some(trimmed) }
+            })
+            .flatten();
+            let Some(pattern) = text else { return };
+            {
+                let mut s = store.borrow_mut();
+                s.add_output_highlight_rule(OutputHighlightRule {
+                    pattern,
+                    regex: false,
+                    case_sensitive: false,
+                    whole_line: false,
+                    color: String::new(),
+                    bg_color: color.to_string(),
+                    enabled: true,
+                });
+                let _ = s.save();
+                if let Some(w) = weak.upgrade() {
+                    w.set_output_highlight_rules(output_highlight_rule_model(&s));
+                    apply_custom_output_rules(&w, &bufs_hl, s.output_highlight_rules());
+                }
+            }
+        });
+    }
+    // Right-click → remove highlight for the selected text pattern.
+    {
+        let bufs_hl = bufs.clone();
+        let weak = window.as_weak();
+        let store = store.clone();
+        window.on_term_remove_highlight(move |tab_id: SharedString| {
+            let tid = tab_id.to_string();
+            let text = with_term_buf(&bufs_hl, &tid, |buf| {
+                if !buf.selection_has_extent() {
+                    return None;
+                }
+                let t = buf.extract_selection_text();
+                let trimmed = t.trim().to_string();
+                if trimmed.is_empty() { None } else { Some(trimmed) }
+            })
+            .flatten();
+            let Some(pattern) = text else { return };
+            {
+                let mut s = store.borrow_mut();
+                let rules: Vec<_> = s
+                    .output_highlight_rules()
+                    .iter()
+                    .filter(|r| !(r.bg_color != "" && r.pattern.trim() == pattern))
+                    .cloned()
+                    .collect();
+                s.cache.output_highlight_rules = rules;
+                let _ = s.save();
+                if let Some(w) = weak.upgrade() {
+                    w.set_output_highlight_rules(output_highlight_rule_model(&s));
+                    apply_custom_output_rules(&w, &bufs_hl, s.output_highlight_rules());
+                }
             }
         });
     }

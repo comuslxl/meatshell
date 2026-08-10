@@ -78,15 +78,24 @@ pub(crate) fn highlight_plain_output(
 
 fn highlight_custom_output(mut runs: Vec<HistSpan>, rules: &[CompiledOutputRule]) -> Vec<HistSpan> {
     for rule in rules {
+        let eligible = if rule.is_bg {
+            custom_rule_eligible_bg
+        } else {
+            custom_rule_eligible
+        };
         if rule.whole_line
             && runs
                 .iter()
-                .any(|run| custom_rule_eligible(run) && rule.matcher.is_match(&run.text))
+                .any(|run| eligible(run) && rule.matcher.is_match(&run.text))
         {
             for run in &mut runs {
-                if custom_rule_eligible(run) {
-                    run.fg = vt100::Color::Idx(rule.ansi_index);
-                    run.bold = true;
+                if eligible(run) {
+                    if rule.is_bg {
+                        run.bg = vt100::Color::Idx(rule.ansi_index);
+                    } else {
+                        run.fg = vt100::Color::Idx(rule.ansi_index);
+                        run.bold = true;
+                    }
                 }
             }
             continue;
@@ -94,7 +103,7 @@ fn highlight_custom_output(mut runs: Vec<HistSpan>, rules: &[CompiledOutputRule]
 
         let mut next = Vec::with_capacity(runs.len() + 2);
         for run in runs {
-            if !custom_rule_eligible(&run) {
+            if !eligible(&run) {
                 next.push(run);
                 continue;
             }
@@ -107,7 +116,12 @@ fn highlight_custom_output(mut runs: Vec<HistSpan>, rules: &[CompiledOutputRule]
             if matches.is_empty() {
                 next.push(run);
             } else {
-                next.extend(style_custom_matches(run, &matches, rule.ansi_index));
+                next.extend(style_custom_matches(
+                    run,
+                    &matches,
+                    rule.ansi_index,
+                    rule.is_bg,
+                ));
             }
         }
         runs = next;
@@ -122,10 +136,17 @@ fn custom_rule_eligible(run: &HistSpan) -> bool {
         && !run.inverse
 }
 
+/// Background rules can paint over runs that already have a fg colour from a
+/// prior rule pass; only the background must be unstyled.
+fn custom_rule_eligible_bg(run: &HistSpan) -> bool {
+    matches!(run.bg, vt100::Color::Default) && !run.inverse
+}
+
 fn style_custom_matches(
     run: HistSpan,
     matches: &[(usize, usize)],
     ansi_index: u8,
+    is_bg: bool,
 ) -> Vec<HistSpan> {
     let mut out = Vec::with_capacity(matches.len() * 2 + 1);
     let mut byte_pos = 0usize;
@@ -149,8 +170,12 @@ fn style_custom_matches(
         let cells = text_cell_width(text);
         let mut hit = run.clone();
         hit.text = text.to_string();
-        hit.fg = vt100::Color::Idx(ansi_index);
-        hit.bold = true;
+        if is_bg {
+            hit.bg = vt100::Color::Idx(ansi_index);
+        } else {
+            hit.fg = vt100::Color::Idx(ansi_index);
+            hit.bold = true;
+        }
         hit.col = col;
         hit.cells = cells;
         out.push(hit);
@@ -396,6 +421,7 @@ fn embedded_preset_rules() -> &'static [CompiledOutputRule] {
                         matcher,
                         whole_line: false,
                         ansi_index,
+                        is_bg: false,
                     })
             })
             .collect()

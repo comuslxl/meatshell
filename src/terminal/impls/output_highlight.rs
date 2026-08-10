@@ -16,10 +16,17 @@ pub(crate) fn compile_output_rules(rules: &[OutputHighlightRule]) -> Vec<Compile
                 .case_insensitive(!rule.case_sensitive)
                 .build()
                 .ok()?;
+            let is_bg = !rule.bg_color.is_empty();
+            let ansi_index = if is_bg {
+                highlight_bg_color_index(&rule.bg_color)
+            } else {
+                highlight_color_index(&rule.color)
+            };
             Some(CompiledOutputRule {
                 matcher,
                 whole_line: rule.whole_line,
-                ansi_index: highlight_color_index(&rule.color),
+                ansi_index,
+                is_bg,
             })
         })
         .collect()
@@ -33,6 +40,19 @@ fn highlight_color_index(color: &str) -> u8 {
         "magenta" => 13,
         "gray" => 8,
         _ => 9,
+    }
+}
+
+/// Soft 256-colour background palette for highlighter-pen style bg rules.
+fn highlight_bg_color_index(color: &str) -> u8 {
+    match color {
+        "red" => 52,
+        "yellow" => 58,
+        "green" => 22,
+        "cyan" => 24,
+        "magenta" => 54,
+        "orange" => 94,
+        _ => 58,
     }
 }
 

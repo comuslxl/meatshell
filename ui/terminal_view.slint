@@ -371,6 +371,8 @@ export component TerminalView inherits Rectangle {
     callback select-end();                  // finish selection → copy to clipboard
     callback select-autoscroll(int);        // auto-scroll while dragging past edge (dir: -1 up / +1 down)
     callback select-word(int, int);         // double-click word select at (row, col)
+    callback highlight-selected(string);    // bg-highlight selected text with color
+    callback remove-highlight();            // remove bg-highlight for selected text
 
     // Right-click context-menu anchor + find-bar visibility (private UI state).
     property <length> ctx-x;
@@ -868,8 +870,8 @@ export component TerminalView inherits Rectangle {
                         ctx-menu := PopupWindow {
                             x: root.ctx-x;
                             y: root.ctx-y;
-                            width: 132px;
-                            height: 132px;
+                            width: 152px;
+                            height: 220px;
                             Rectangle {
                                 background: Theme.bg-panel;
                                 border-radius: Theme.radius-sm;
@@ -895,6 +897,68 @@ export component TerminalView inherits Rectangle {
                                     MenuItem {
                                         icon: "\u{E8B6}"; label: @tr("Find");
                                         clicked => { root.find-active = true; }
+                                    }
+                                    if root.selection.length > 0 : Rectangle {
+                                        height: 68px;
+                                        VerticalLayout {
+                                            padding: 4px;
+                                            spacing: 4px;
+                                            Rectangle { height: 1px; background: Theme.border-subtle; }
+                                            Text {
+                                                text: @tr("Highlight");
+                                                color: Theme.text-muted;
+                                                font-size: Theme.fs-sm;
+                                            }
+                                            HorizontalLayout {
+                                                spacing: 4px;
+                                                Rectangle {
+                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    background: #8b3636;
+                                                    hl-ta-red := TouchArea {
+                                                        clicked => { root.highlight-selected("red"); ctx-menu.close(); }
+                                                    }
+                                                }
+                                                Rectangle {
+                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    background: #8b7530;
+                                                    hl-ta-yellow := TouchArea {
+                                                        clicked => { root.highlight-selected("yellow"); ctx-menu.close(); }
+                                                    }
+                                                }
+                                                Rectangle {
+                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    background: #2d6b2d;
+                                                    hl-ta-green := TouchArea {
+                                                        clicked => { root.highlight-selected("green"); ctx-menu.close(); }
+                                                    }
+                                                }
+                                                Rectangle {
+                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    background: #2d5d6b;
+                                                    hl-ta-cyan := TouchArea {
+                                                        clicked => { root.highlight-selected("cyan"); ctx-menu.close(); }
+                                                    }
+                                                }
+                                                Rectangle {
+                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    background: #6b2d6b;
+                                                    hl-ta-magenta := TouchArea {
+                                                        clicked => { root.highlight-selected("magenta"); ctx-menu.close(); }
+                                                    }
+                                                }
+                                                Rectangle {
+                                                    width: 20px; height: 20px; border-radius: 10px;
+                                                    background: #8b5a2d;
+                                                    hl-ta-orange := TouchArea {
+                                                        clicked => { root.highlight-selected("orange"); ctx-menu.close(); }
+                                                    }
+                                                }
+                                            }
+                                            MenuItem {
+                                                icon: "\u{E738}"; label: @tr("Remove highlight");
+                                                clicked => { root.remove-highlight(); ctx-menu.close(); }
+                                            }
+                                        }
                                     }
                                 }
                             }

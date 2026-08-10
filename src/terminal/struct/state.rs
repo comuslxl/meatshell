@@ -53,6 +53,7 @@ pub(crate) struct CompiledOutputRule {
     pub(crate) matcher: regex::Regex,
     pub(crate) whole_line: bool,
     pub(crate) ansi_index: u8,
+    pub(crate) is_bg: bool,
 }
 
 pub(crate) type TermBufferHandle = Arc<Mutex<TermBuffer>>;
