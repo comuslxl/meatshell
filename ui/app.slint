@@ -834,6 +834,7 @@ export component AppWindow inherits Window {
     callback term-select-start(string /* tab-id */, int /* row */, int /* col */, bool /* ctrl */, bool /* shift */);
     callback term-select-update(string /* tab-id */, int /* row */, int /* col */);
     callback term-select-end(string /* tab-id */);
+    callback term-select-word(string /* tab-id */, int /* row */, int /* col */);
     callback term-select-autoscroll(string /* tab-id */, int /* dir */);
 
     // Immersive wallpaper layer — painted behind everything, filling the window.
@@ -1934,6 +1935,7 @@ export component AppWindow inherits Window {
                     select-start(r, c, ctrl, shift) => { root.term-select-start(term.id, r, c, ctrl, shift); }
                     select-update(r, c) => { root.term-select-update(term.id, r, c); }
                     select-end() => { root.term-select-end(term.id); }
+                    select-word(r, c) => { root.term-select-word(term.id, r, c); }
                     select-autoscroll(dir) => { root.term-select-autoscroll(term.id, dir); }
                 }
 

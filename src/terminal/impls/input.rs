@@ -135,6 +135,19 @@ pub(crate) fn bare_ctrl_marker_workaround_enabled() -> bool {
 }
 
 pub(crate) fn key_to_pty_bytes(key: &str, ctrl: bool, alt: bool, app_cursor: bool) -> Vec<u8> {
+    // Ctrl+Arrow → word-wise cursor movement (xterm modify-other-keys mode).
+    // Must precede the special-key block below, which returns plain arrow
+    // sequences without considering modifier keys.
+    if ctrl && !alt {
+        match key {
+            "\u{F700}" => return b"\x1b[1;5A".to_vec(),
+            "\u{F701}" => return b"\x1b[1;5B".to_vec(),
+            "\u{F702}" => return b"\x1b[1;5D".to_vec(),
+            "\u{F703}" => return b"\x1b[1;5C".to_vec(),
+            _ => {}
+        }
+    }
+
     let special: Option<&[u8]> = match key {
         "\u{F700}" => Some(if app_cursor { b"\x1bOA" } else { b"\x1b[A" }),
         "\u{F701}" => Some(if app_cursor { b"\x1bOB" } else { b"\x1b[B" }),

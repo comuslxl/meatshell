@@ -370,6 +370,7 @@ export component TerminalView inherits Rectangle {
     callback select-update(int, int);       // extend drag-selection to (row, col)
     callback select-end();                  // finish selection → copy to clipboard
     callback select-autoscroll(int);        // auto-scroll while dragging past edge (dir: -1 up / +1 down)
+    callback select-word(int, int);         // double-click word select at (row, col)
 
     // Right-click context-menu anchor + find-bar visibility (private UI state).
     property <length> ctx-x;
@@ -711,6 +712,11 @@ export component TerminalView inherits Rectangle {
                                 }
                                 accept
                             }
+                            double-clicked => {
+                                root.select-word(
+                                    floor(self.mouse-y / root.cell-h),
+                                    floor(self.mouse-x / root.cell-w));
+                            }
                         }
 
                         // Drag-selection highlights (under the text, blue tint).
@@ -993,9 +999,9 @@ export component TerminalView inherits Rectangle {
                         root.send-key(event.text,
                                       Theme.is-mac ? event.modifiers.meta : event.modifiers.control,
                                       event.modifiers.alt, event.modifiers.shift);
-                        accept
-                    }
-                }
+                                accept
+                            }
+                        }
 
                 // Safety-net for IME commits delivered via WM_IME_CHAR (which
                 // may not fire key-pressed).  Guard with preedit-text == "" to

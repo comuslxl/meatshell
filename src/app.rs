@@ -5183,6 +5183,56 @@ fn wire_key_input(
             }
         });
     }
+    // Double-click word selection: scan the displayed text at the click position
+    // for word boundaries, set the selection range, and auto-copy.
+    {
+        let bufs_sel = bufs.clone();
+        let weak = window.as_weak();
+        window.on_term_select_word(move |tab_id: SharedString, row: i32, col: i32| {
+            let tid = tab_id.to_string();
+            let text = with_term_buf(&bufs_sel, &tid, |buf| {
+                let r = row.clamp(0, 0) as u16;
+                let abs = buf.vis_to_abs(r);
+                let line_idx = r as usize;
+                let line = buf.displayed_text.get(line_idx)?;
+                let chars: Vec<char> = line.chars().collect();
+                if chars.is_empty() {
+                    return None;
+                }
+                let click = (col as usize).min(chars.len().saturating_sub(1));
+                if chars[click].is_whitespace() {
+                    return None;
+                }
+                let mut start = click;
+                while start > 0 && !chars[start - 1].is_whitespace() {
+                    start -= 1;
+                }
+                let mut end = click;
+                while end < chars.len() && !chars[end].is_whitespace() {
+                    end += 1;
+                }
+                if end <= start {
+                    return None;
+                }
+                let anchor = (abs, start as u16);
+                let focus = (abs, (end - 1) as u16);
+                buf.sel_ranges.clear();
+                buf.sel_ranges.push((anchor, focus));
+                buf.sel_anchor = Some(anchor);
+                buf.sel_focus = Some(focus);
+                Some(buf.extract_selection_text())
+            })
+            .flatten();
+            if let Some(t) = text {
+                if !t.is_empty() {
+                    std::thread::spawn(move || clipboard_set_text(t));
+                }
+            }
+            if let Some(win) = weak.upgrade() {
+                refresh_terminal_selection(&win, &bufs_sel, &tid);
+            }
+        });
+    }
     // Auto-scroll while drag-selecting past the visible top/bottom edge.  The
     // anchor is in absolute coordinates so it stays pinned no matter how far the
     // view moves; we only advance the scrollback view and re-point the focus at
