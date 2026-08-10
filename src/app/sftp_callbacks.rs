@@ -324,6 +324,9 @@ pub(super) fn wire_sftp_callbacks(
                     let mut r = row.clone();
                     r.sftp_selected_count = n;
                     tm.set_row_data(ti, r);
+                    if w.get_active_tab_id().as_str() == tab_id.as_str() {
+                        sync_active_sftp_state(&w);
+                    }
                 }
                 break;
             }

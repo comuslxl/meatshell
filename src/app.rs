@@ -2589,21 +2589,39 @@ fn app_content_area(win: &AppWindow) -> LogicalRect {
     area
 }
 
-/// Sync the active tab's SFTP collapse state into the Slint property used by
-/// the activity bar icon. Called on tab switch and on SFTP collapse/expand.
+/// Sync the active tab's SFTP state into the Slint properties used by the
+/// activity bar icon and the dock-area SftpPanel. Called on tab switch.
 fn sync_active_sftp_state(win: &AppWindow) {
     let active = win.get_active_tab_id().to_string();
-    let collapsed = if active.is_empty() || active == "welcome" {
-        true
-    } else {
-        let terms = win.get_terminals();
-        (0..terms.row_count())
-            .filter_map(|i| terms.row_data(i))
-            .find(|t| t.id.as_str() == active.as_str())
-            .map(|t| t.sftp_collapsed)
-            .unwrap_or(true)
-    };
-    win.set_active_sftp_collapsed(collapsed);
+    if active.is_empty() || active == "welcome" {
+        win.set_active_sftp_collapsed(true);
+        win.set_active_sftp_available(false);
+        return;
+    }
+    let terms = win.get_terminals();
+    let term = (0..terms.row_count())
+        .filter_map(|i| terms.row_data(i))
+        .find(|t| t.id.as_str() == active.as_str());
+
+    match term {
+        Some(t) => {
+            win.set_active_sftp_collapsed(t.sftp_collapsed);
+            win.set_active_sftp_path(t.sftp_path.clone());
+            win.set_active_sftp_entries(t.sftp_entries.clone());
+            win.set_active_sftp_status(t.sftp_status.clone());
+            win.set_active_sftp_loading(t.sftp_loading);
+            win.set_active_sftp_tree_nodes(t.sftp_tree_nodes.clone());
+            win.set_active_sftp_selected_count(t.sftp_selected_count);
+            win.set_active_sftp_sort_key(t.sftp_sort_key.clone());
+            win.set_active_sftp_sort_dir(t.sftp_sort_dir);
+            win.set_active_sftp_available(t.sftp_available);
+            win.set_active_sftp_tunnels(t.tunnels.clone());
+        }
+        None => {
+            win.set_active_sftp_collapsed(true);
+            win.set_active_sftp_available(false);
+        }
+    }
 }
 
 fn active_terminal_panel_rects(win: &AppWindow) -> Option<(String, LogicalRect, TerminalState)> {

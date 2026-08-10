@@ -190,6 +190,9 @@ pub(super) fn apply_session_event_to_window(
             update_terminal(&|t| {
                 t.tunnels = ModelRc::from(std::rc::Rc::new(VecModel::from(items.clone())));
             });
+            if win.get_active_tab_id().as_str() == tab_id {
+                sync_active_sftp_state(win);
+            }
         }
 
         // --- SFTP events ---------------------------------------------------
@@ -200,6 +203,9 @@ pub(super) fn apply_session_event_to_window(
                 t.sftp_path = path.clone().into();
                 t.sftp_loading = true;
             });
+            if win.get_active_tab_id().as_str() == tab_id {
+                sync_active_sftp_state(win);
+            }
         }
         SessionEvent::SftpEntries { path, entries } => {
             let mut slint_entries: Vec<SftpEntry> = entries
@@ -234,9 +240,15 @@ pub(super) fn apply_session_event_to_window(
                 t.sftp_entries = model.clone();
                 t.sftp_loading = false;
             });
+            if win.get_active_tab_id().as_str() == tab_id {
+                sync_active_sftp_state(win);
+            }
         }
         SessionEvent::SftpStatus(msg) => {
             update_terminal(&|t| t.sftp_status = msg.clone().into());
+            if win.get_active_tab_id().as_str() == tab_id {
+                sync_active_sftp_state(win);
+            }
         }
         SessionEvent::SftpError(msg) => {
             // Show the reason and stop the spinner; leave the current listing in
@@ -245,6 +257,9 @@ pub(super) fn apply_session_event_to_window(
                 t.sftp_status = msg.clone().into();
                 t.sftp_loading = false;
             });
+            if win.get_active_tab_id().as_str() == tab_id {
+                sync_active_sftp_state(win);
+            }
         }
         SessionEvent::SftpFileText {
             path,
@@ -297,6 +312,9 @@ pub(super) fn apply_session_event_to_window(
                 .collect();
             let model = ModelRc::from(std::rc::Rc::new(VecModel::from(slint_nodes)));
             update_terminal(&|t| t.sftp_tree_nodes = model.clone());
+            if win.get_active_tab_id().as_str() == tab_id {
+                sync_active_sftp_state(win);
+            }
         }
         SessionEvent::SftpTransfer {
             id,
