@@ -5362,15 +5362,16 @@ fn wire_key_input(
                     return None;
                 }
                 let click = (col as usize).min(chars.len().saturating_sub(1));
-                if chars[click].is_whitespace() {
+                let is_word_char = |c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '/' | '~');
+                if !is_word_char(chars[click]) {
                     return None;
                 }
                 let mut start = click;
-                while start > 0 && !chars[start - 1].is_whitespace() {
+                while start > 0 && is_word_char(chars[start - 1]) {
                     start -= 1;
                 }
                 let mut end = click;
-                while end < chars.len() && !chars[end].is_whitespace() {
+                while end < chars.len() && is_word_char(chars[end]) {
                     end += 1;
                 }
                 if end <= start {
