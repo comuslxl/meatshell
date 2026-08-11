@@ -33,6 +33,14 @@ pub(crate) struct TermBuffer {
     pub(crate) prev: Vec<Line>,
     pub(crate) view_offset: usize,
     pub(crate) displayed_text: Vec<String>,
+    /// Per-row timestamp snapshot for the live screen. Updated only when
+    /// the row's text content changes (compared against `live_row_snapshot`),
+    /// so redraws that don't alter text (e.g. cursor blink) keep the timestamp
+    /// the row's content first appeared at.
+    pub(crate) live_row_timestamps: Vec<String>,
+    /// Last-rendered text per live row, for change detection. Kept in lockstep
+    /// with `live_row_timestamps` (same length, same row indices).
+    pub(crate) live_row_snapshot: Vec<String>,
     pub(crate) csi_state: CsiState,
     pub(crate) csi_pending: Vec<u8>,
     pub(crate) raw: VecDeque<u8>,

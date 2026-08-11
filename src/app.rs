@@ -3916,6 +3916,8 @@ fn wire_session_callbacks(
                     prev: Vec::new(),
                     view_offset: 0,
                     displayed_text: Vec::new(),
+                    live_row_timestamps: Vec::new(),
+                    live_row_snapshot: Vec::new(),
                     csi_state: CsiState::Normal,
                     csi_pending: Vec::new(),
                     raw: std::collections::VecDeque::new(),
@@ -4661,6 +4663,8 @@ fn wire_key_input(
                             b.history.clear();
                             b.prev.clear();
                             b.displayed_text.clear();
+                            b.live_row_timestamps.clear();
+                            b.live_row_snapshot.clear();
                             b.view_offset = 0;
                             b.sel_anchor = None;
                             b.sel_focus = None;
@@ -5098,6 +5102,8 @@ fn wire_key_input(
                 buf.sel_focus = None;
                 buf.sel_ranges.clear();
                 buf.displayed_text = Vec::new();
+                buf.live_row_timestamps.clear();
+                buf.live_row_snapshot.clear();
                 buf.raw.clear();
             }
             if let Some(win) = weak.upgrade() {

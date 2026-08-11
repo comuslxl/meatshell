@@ -33,6 +33,8 @@ fn make_buf(
         prev: Vec::new(),
         view_offset,
         displayed_text: Vec::new(),
+        live_row_timestamps: Vec::new(),
+        live_row_snapshot: Vec::new(),
         csi_state: CsiState::Normal,
         csi_pending: Vec::new(),
         raw: std::collections::VecDeque::new(),

@@ -365,6 +365,8 @@ impl TermBuffer {
             self.history.clear();
             self.history_highlight.clear();
             self.history_timestamps.clear();
+            self.live_row_timestamps.clear();
+            self.live_row_snapshot.clear();
             self.prev.clear();
             self.view_offset = 0;
             self.sel_anchor = None;
@@ -428,6 +430,8 @@ impl TermBuffer {
         self.history.clear();
         self.history_highlight.clear();
         self.history_timestamps.clear();
+        self.live_row_timestamps.clear();
+        self.live_row_snapshot.clear();
         self.prev.clear();
         self.view_offset = 0;
         // Scrollback line count changes, so absolute selection coords no longer map.
@@ -440,7 +444,8 @@ impl TermBuffer {
     /// Returns `(first_abs_row, timestamps)` for the current viewport — the
     /// absolute row index of the top visible row, plus one timestamp string per
     /// visible row. History rows use the stored timestamp; live-screen rows use
-    /// the current time.
+    /// the cached per-row timestamp updated in `render` (so redraws that don't
+    /// alter text keep the timestamp the row's content first appeared at).
     pub(crate) fn gutter_data(&self, rows: u16) -> (i32, Vec<String>) {
         let hist_len = self.history.len();
         let rows = rows as usize;
@@ -457,7 +462,16 @@ impl TermBuffer {
                         .unwrap_or_default(),
                 );
             } else {
-                timestamps.push(now_timestamp());
+                // Live screen row — use cached per-row timestamp (populated in
+                // `render`). Falls back to empty for rows that haven't been
+                // rendered yet (e.g. fresh tab before first paint).
+                let live_idx = idx - hist_len;
+                timestamps.push(
+                    self.live_row_timestamps
+                        .get(live_idx)
+                        .cloned()
+                        .unwrap_or_default(),
+                );
             }
         }
         (start as i32, timestamps)
@@ -540,6 +554,25 @@ impl TermBuffer {
         self.prev = curr;
     }
 
+    /// Refresh `live_row_timestamps` against `live_row_snapshot` using the
+    /// freshly rendered `rows_text` (one entry per live screen row, in screen
+    /// order). For each row whose trimmed text differs from the cached
+    /// snapshot, stamp the current time and store the new text. Unchanged rows
+    /// keep their original timestamp — this is what stabilises timestamps
+    /// across redraws that don't alter text (cursor blink, hover, etc.).
+    fn refresh_live_timestamps(&mut self, rows_text: &[String]) {
+        let rows = rows_text.len();
+        self.live_row_timestamps.resize(rows, String::new());
+        self.live_row_snapshot.resize(rows, String::new());
+        for r in 0..rows {
+            let current = &rows_text[r];
+            if self.live_row_snapshot[r].as_str() != current.as_str() {
+                self.live_row_timestamps[r] = now_timestamp();
+                self.live_row_snapshot[r] = current.clone();
+            }
+        }
+    }
+
     /// Render the terminal grid for the current scrollback `view_offset`
     /// (0 = live).  Caches the displayed plain text for find/selection.
     pub(crate) fn render(&mut self) -> BuiltScreen {
@@ -572,6 +605,7 @@ impl TermBuffer {
                 }
                 displayed.push(plain.trim_end().to_string());
             }
+            self.refresh_live_timestamps(&displayed);
             self.displayed_text = displayed;
             let rows_used = if is_alt {
                 rows as i32
@@ -635,6 +669,15 @@ impl TermBuffer {
             displayed.push(String::new());
         }
         self.displayed_text = displayed;
+        // The scrolled-view `displayed` mixes history + live rows by viewport
+        // position, so it can't index `live_row_timestamps` directly. Update
+        // the cache from `live` (the screen buffer dump) instead — it's in
+        // screen order, one entry per live row, matching the cache layout.
+        let live_plain: Vec<String> = live
+            .iter()
+            .map(|l| l.0.trim_end().to_string())
+            .collect();
+        self.refresh_live_timestamps(&live_plain);
         BuiltScreen {
             spans,
             cursor_row: -1, // hide the live cursor while viewing history
