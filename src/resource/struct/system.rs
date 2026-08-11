@@ -59,6 +59,8 @@ pub(crate) struct TabStatus {
     pub(crate) host: String,
     pub(crate) user: String,
     pub(crate) session_id: String,
+    /// Drives SFTP-panel dispatch (SSH → SFTP, Local → std::fs, else → stub).
+    pub(crate) kind: crate::config::SessionKind,
     pub(crate) state: u8,
     pub(crate) cpu: f32,
     pub(crate) mem_used_kib: u64,

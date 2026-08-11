@@ -1032,12 +1032,11 @@ export component AppWindow inherits Window {
                 ? 36px : parent.height - dock-area.quick-top - dock-area.quick-bottom;
             dock-edge: dock-area.activity-bar-edge;
             drag-enabled: true;
-            // Hide a slot when it shows SFTP but the active session has no
-            // SFTP (local/serial/telnet) — avoids a dead icon. Slot-0 has no
-            // show-* property; it is handled by the early-return guard in
-            // `expand` instead.
-            show-second: !(dock-area.activity-slot-1 == "sftp" && !root.active-sftp-available);
-            show-third: !(dock-area.activity-slot-2 == "sftp" && !root.active-sftp-available);
+            // Every session type now shows a file panel (SSH → SFTP,
+            // Local → std::fs, Serial/Telnet → "not supported" stub), so the
+            // icon is always visible.
+            show-second: true;
+            show-third: true;
             // Dynamic icon bindings: each slot displays whichever panel id is
             // currently assigned to it (sidebar / welcome / sftp). All three
             // slots are reorderable; dragging an icon onto another slot swaps
@@ -1163,12 +1162,6 @@ export component AppWindow inherits Window {
                 dock-area.activity-drag-panel = "";
             }
             expand => {
-                if (dock-area.activity-slot-0 == "sftp" && !root.active-sftp-available) {
-                    // Non-SSH session: SFTP not available — icon is hidden via
-                    // show-* bindings only for slots 1/2; slot-0 is always
-                    // rendered, so suppress the toggle here.
-                    return;
-                }
                 if (dock-area.activity-slot-0 == "welcome") {
                     root.welcome-collapsed = !root.welcome-collapsed;
                     root.set-welcome-collapsed(root.welcome-collapsed);
@@ -1205,9 +1198,6 @@ export component AppWindow inherits Window {
                 }
             }
             expand-second => {
-                if (dock-area.activity-slot-1 == "sftp" && !root.active-sftp-available) {
-                    return;
-                }
                 if (dock-area.activity-slot-1 == "welcome") {
                     root.welcome-collapsed = !root.welcome-collapsed;
                     root.set-welcome-collapsed(root.welcome-collapsed);
@@ -1244,9 +1234,6 @@ export component AppWindow inherits Window {
                 }
             }
             expand-third => {
-                if (dock-area.activity-slot-2 == "sftp" && !root.active-sftp-available) {
-                    return;
-                }
                 if (dock-area.activity-slot-2 == "welcome") {
                     root.welcome-collapsed = !root.welcome-collapsed;
                     root.set-welcome-collapsed(root.welcome-collapsed);

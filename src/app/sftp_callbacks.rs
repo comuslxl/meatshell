@@ -4,11 +4,13 @@ pub(super) fn wire_sftp_callbacks(
     window: &AppWindow,
     sftp_handles: SftpHandles,
     sftp_last_cwd: SftpLastCwd,
+    tab_statuses: TabStatuses,
 ) {
     // Navigate to a remote path (or ".." to go up one level).
     {
         let sftp_handles = sftp_handles.clone();
         let sftp_last_cwd = sftp_last_cwd.clone();
+        let statuses = tab_statuses.clone();
         let weak = window.as_weak();
         window.on_sftp_navigate(move |tab_id: SharedString, path: SharedString| {
             let tab_id = tab_id.to_string();
@@ -37,9 +39,32 @@ pub(super) fn wire_sftp_callbacks(
             // directory — snaps the panel back to the shell's cwd; manual
             // navigation never permanently disables cd-follow.
             sftp_last_cwd.lock().unwrap().remove(&tab_id);
-            if let Ok(handles) = sftp_handles.lock() {
-                if let Some(h) = handles.get(&tab_id) {
-                    h.list_dir(resolved);
+            let kind = get_session_kind(&statuses, &tab_id);
+            match kind {
+                SessionKind::Local => {
+                    let entries = list_local_dir(&resolved);
+                    if let Some(w) = weak.upgrade() {
+                        let model = ModelRc::from(std::rc::Rc::new(VecModel::from(entries)));
+                        set_terminal_row(&w, &tab_id, |row| {
+                            row.sftp_path = resolved.clone().into();
+                            row.sftp_entries = model.clone();
+                            row.sftp_loading = false;
+                        });
+                        if w.get_active_tab_id().as_str() == tab_id.as_str() {
+                            sync_active_sftp_state(&w);
+                        }
+                    }
+                }
+                SessionKind::Serial | SessionKind::Telnet => {
+                    // No file channel on these transports; the panel's status
+                    // line already says "not supported".
+                }
+                SessionKind::Ssh => {
+                    if let Ok(handles) = sftp_handles.lock() {
+                        if let Some(h) = handles.get(&tab_id) {
+                            h.list_dir(resolved);
+                        }
+                    }
                 }
             }
         });
@@ -204,13 +229,35 @@ pub(super) fn wire_sftp_callbacks(
     // Refresh the current directory listing.
     {
         let sftp_handles = sftp_handles.clone();
+        let statuses = tab_statuses.clone();
+        let weak = window.as_weak();
         window.on_sftp_refresh(move |tab_id: SharedString, path: SharedString| {
             let tab_id = tab_id.to_string();
             let path = path.to_string();
-            if let Ok(handles) = sftp_handles.lock() {
-                if let Some(h) = handles.get(&tab_id) {
-                    // Refresh re-syncs the left tree too, not just the file list (#189).
-                    h.refresh_dir(path);
+            let kind = get_session_kind(&statuses, &tab_id);
+            match kind {
+                SessionKind::Local => {
+                    let entries = list_local_dir(&path);
+                    if let Some(w) = weak.upgrade() {
+                        let model = ModelRc::from(std::rc::Rc::new(VecModel::from(entries)));
+                        set_terminal_row(&w, &tab_id, |row| {
+                            row.sftp_path = path.clone().into();
+                            row.sftp_entries = model.clone();
+                            row.sftp_loading = false;
+                        });
+                        if w.get_active_tab_id().as_str() == tab_id.as_str() {
+                            sync_active_sftp_state(&w);
+                        }
+                    }
+                }
+                SessionKind::Serial | SessionKind::Telnet => {}
+                SessionKind::Ssh => {
+                    if let Ok(handles) = sftp_handles.lock() {
+                        if let Some(h) = handles.get(&tab_id) {
+                            // Refresh re-syncs the left tree too, not just the file list (#189).
+                            h.refresh_dir(path);
+                        }
+                    }
                 }
             }
         });
@@ -679,6 +726,99 @@ pub(super) fn wire_sftp_callbacks(
             w.set_editor_dirty(false);
         });
     }
+}
+
+// ---------------------------------------------------------------------------
+// Local session helpers — replace the SSH SFTP channel with std::fs
+// ---------------------------------------------------------------------------
+
+fn get_session_kind(statuses: &TabStatuses, tab_id: &str) -> SessionKind {
+    statuses
+        .lock()
+        .unwrap()
+        .get(tab_id)
+        .map(|s| s.kind)
+        .unwrap_or(SessionKind::Ssh)
+}
+
+fn local_sftp_entry(name: &str, full_path: &str, is_dir: bool, size: u64, mtime: u32, mode: u32) -> SftpEntry {
+    SftpEntry {
+        name: name.into(),
+        full_path: full_path.into(),
+        is_dir,
+        size: if is_dir {
+            String::new().into()
+        } else {
+            format_size(size).into()
+        },
+        size_bytes: size as f32,
+        modified: format_mtime(mtime).into(),
+        modified_ts: mtime as f32,
+        mode: (mode & 0o7777) as i32,
+        selected: false,
+    }
+}
+
+/// Render a local directory as the same `SftpEntry` rows the remote listing
+/// produces. Read errors collapse to an empty listing so the panel shows
+/// "nothing here" instead of crashing the navigate callback.
+pub(super) fn list_local_dir(path: &str) -> Vec<SftpEntry> {
+    let base = if path.is_empty() {
+        std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/"))
+    } else {
+        std::path::PathBuf::from(path)
+    };
+    // Probe readability before constructing ".." so an unreadable path yields
+    // an empty listing, not a misleading parent entry.
+    let Ok(rd) = std::fs::read_dir(&base) else {
+        return Vec::new();
+    };
+    let mut entries: Vec<SftpEntry> = Vec::new();
+    if let Some(parent) = base.parent() {
+        if parent != base {
+            entries.push(local_sftp_entry(
+                "..",
+                &parent.to_string_lossy(),
+                true,
+                0,
+                0,
+                0,
+            ));
+        }
+    }
+    let mut items: Vec<SftpEntry> = rd
+        .filter_map(|e| {
+            let e = e.ok()?;
+            let meta = e.metadata().ok()?;
+            let name = e.file_name().to_string_lossy().to_string();
+            let full_path = e.path().to_string_lossy().to_string();
+            #[cfg(unix)]
+            let (mode, mtime) = {
+                use std::os::unix::fs::PermissionsExt;
+                let mode = meta.permissions().mode();
+                let mtime = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs() as u32)
+                    .unwrap_or(0);
+                (mode, mtime)
+            };
+            #[cfg(not(unix))]
+            let (mode, mtime) = (0o644, 0);
+            Some(local_sftp_entry(
+                &name,
+                &full_path,
+                meta.is_dir(),
+                meta.len(),
+                mtime,
+                mode,
+            ))
+        })
+        .collect();
+    sort_sftp_entries(&mut items, "", 0);
+    entries.extend(items);
+    entries
 }
 
 // ---------------------------------------------------------------------------

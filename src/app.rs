@@ -1964,7 +1964,7 @@ pub fn run() -> Result<()> {
         sftp_handles.clone(),
         sftp_last_cwd.clone(),
     );
-    wire_sftp_callbacks(&window, sftp_handles.clone(), sftp_last_cwd.clone());
+    wire_sftp_callbacks(&window, sftp_handles.clone(), sftp_last_cwd.clone(), tab_statuses.clone());
     wire_key_input(
         &window,
         handles.clone(),
@@ -3807,8 +3807,21 @@ fn wire_session_callbacks(
                 SessionKind::Telnet => format!("telnet {}:{}", session.host, session.port),
                 SessionKind::Local => format!("local {}", session.name),
             };
-            // Serial / Telnet have no SFTP side-channel.
-            let has_sftp = session.kind == SessionKind::Ssh;
+            // The file panel now serves every session kind (formerly SSH-only):
+            // SSH → SFTP, Local → std::fs browse, Serial/Telnet → unsupported stub.
+            let has_sftp = true;
+            let initial_sftp_path: String = match session.kind {
+                SessionKind::Local => std::env::var("HOME").unwrap_or_else(|_| "/".to_string()),
+                _ => "/".to_string(),
+            };
+            let initial_sftp_status: &'static str = match session.kind {
+                SessionKind::Ssh => t("SFTP 连接中...", "SFTP connecting..."),
+                SessionKind::Local => t("本地文件", "Local files"),
+                SessionKind::Serial | SessionKind::Telnet => {
+                    t("此会话类型不支持文件功能", "File operations not available for this session type")
+                }
+            };
+            let sftp_loading_initial = matches!(session.kind, SessionKind::Ssh);
 
             // Seed the per-tab status so the sidebar shows "连接中 host" the
             // moment this tab becomes active (the `changed active-tab-id`
@@ -3819,6 +3832,7 @@ fn wire_session_callbacks(
                     host: conn_label.clone(),
                     user: session.user.clone(),
                     session_id: id.clone(),
+                    kind: session.kind,
                     state: 0,
                     ..Default::default()
                 },
@@ -3859,18 +3873,18 @@ fn wire_session_callbacks(
                 is_alt_screen: false,
                 find_matches: ModelRc::from(std::rc::Rc::new(VecModel::<TermMatch>::default())),
                 selection: ModelRc::from(std::rc::Rc::new(VecModel::<TermMatch>::default())),
-                sftp_path: "/".into(),
-                sftp_entries: ModelRc::from(std::rc::Rc::new(VecModel::<SftpEntry>::default())),
-                sftp_status: if has_sftp {
-                    t("SFTP 连接中...", "SFTP connecting...").into()
-                } else {
-                    t(
-                        "此会话类型不支持 SFTP",
-                        "SFTP not available for this session",
-                    )
-                    .into()
+                sftp_path: initial_sftp_path.clone().into(),
+                sftp_entries: {
+                    // Local has no async handshake; seed entries now so the
+                    // panel isn't empty on first expand.
+                    let entries: Vec<SftpEntry> = match session.kind {
+                        SessionKind::Local => list_local_dir(&initial_sftp_path),
+                        _ => Vec::new(),
+                    };
+                    ModelRc::from(std::rc::Rc::new(VecModel::from(entries)))
                 },
-                sftp_loading: has_sftp,
+                sftp_status: initial_sftp_status.into(),
+                sftp_loading: sftp_loading_initial,
                 sftp_tree_nodes: ModelRc::from(std::rc::Rc::new(
                     VecModel::<SftpTreeNode>::default(),
                 )),
@@ -5738,3 +5752,7 @@ mod selection_tests;
 #[cfg(test)]
 #[path = "../tests/app/output_highlighting/mod.rs"]
 mod log_highlight_tests;
+
+#[cfg(test)]
+#[path = "../tests/app/local_files/mod.rs"]
+mod local_files_tests;
