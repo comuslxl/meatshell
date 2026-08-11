@@ -463,7 +463,7 @@ export component TerminalView inherits Rectangle {
     // output-text; usable height = key-capture height minus the 8px top pad.
     // The old 16px bottom focus-recovery strip was redundant once body-touch
     // covered the full output and visibly stole one terminal row.
-    property <float> term-cols: max(10, floor((root.width - root.gutter-w - 20px - 10px) / cell-w));
+    property <float> term-cols: max(10, floor((root.width - root.gutter-w - 20px) / cell-w));
     property <float> term-rows: max(5,  floor((key-capture.height - 8px) / cell-h));
     // Only resize the PTY while this tab is visible.  Inactive tabs are laid
     // out at width 0 (→ term-cols collapses to 10); resizing the remote to 10
