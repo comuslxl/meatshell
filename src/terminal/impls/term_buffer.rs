@@ -550,6 +550,20 @@ impl TermBuffer {
             if self.view_offset > 0 {
                 self.view_offset = self.view_offset.saturating_add(k);
             }
+            // VT100 scroll: shift live timestamp/snapshot arrays up by k to
+            // match the screen. Without this, snapshot[i] (pre-scroll row i)
+            // is compared against displayed_text[i] (post-scroll row i+1),
+            // so every row is misjudged "changed" and re-stamped — producing
+            // the cascade of identical/reversed timestamps on scroll.
+            if k > 0 {
+                let remove = k.min(self.live_row_timestamps.len());
+                self.live_row_timestamps.drain(0..remove);
+                self.live_row_snapshot.drain(0..remove);
+                for _ in 0..k {
+                    self.live_row_timestamps.push(String::new());
+                    self.live_row_snapshot.push(String::new());
+                }
+            }
         }
         self.prev = curr;
     }
