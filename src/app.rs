@@ -3870,6 +3870,7 @@ fn wire_session_callbacks(
                 scroll_offset: 0,
                 gutter_timestamps: ModelRc::from(std::rc::Rc::new(VecModel::<SharedString>::default())),
                 gutter_first_row: 0,
+                gutter_line_numbers: ModelRc::from(std::rc::Rc::new(VecModel::<i32>::default())),
                 is_alt_screen: false,
                 find_matches: ModelRc::from(std::rc::Rc::new(VecModel::<TermMatch>::default())),
                 selection: ModelRc::from(std::rc::Rc::new(VecModel::<TermMatch>::default())),
@@ -5132,6 +5133,7 @@ fn wire_key_input(
                     row.scroll_offset = 0;
                     row.gutter_timestamps = ModelRc::from(std::rc::Rc::new(VecModel::<SharedString>::default()));
                     row.gutter_first_row = 0;
+                    row.gutter_line_numbers = ModelRc::from(std::rc::Rc::new(VecModel::<i32>::default()));
                 });
             }
             if let Some(h) = handles_clear.borrow().get(&tid) {

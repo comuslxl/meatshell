@@ -189,6 +189,14 @@ pub(super) fn rebuild_tab_display(win: &AppWindow, bufs: &TermBuffers, tab_id: &
     let spans = ModelRc::from(Rc::new(VecModel::from(b.spans)));
     let fm = ModelRc::from(Rc::new(VecModel::from(matches)));
     let sm = ModelRc::from(Rc::new(VecModel::from(sel)));
+    // Compute sequential line numbers: 0 for empty rows, 1+ for content rows.
+    // Must run before `gts` is moved into `gm` below.
+    let mut seq: i32 = 0;
+    let gln: Vec<i32> = gts
+        .iter()
+        .map(|ts| if ts.is_empty() { 0 } else { seq += 1; seq })
+        .collect();
+    let glnm = ModelRc::from(Rc::new(VecModel::from(gln)));
     let gm = ModelRc::from(Rc::new(VecModel::from(
         gts.into_iter().map(SharedString::from).collect::<Vec<_>>(),
     )));
@@ -206,6 +214,7 @@ pub(super) fn rebuild_tab_display(win: &AppWindow, bufs: &TermBuffers, tab_id: &
         row.scroll_offset = soff;
         row.gutter_timestamps = gm.clone();
         row.gutter_first_row = gfirst;
+        row.gutter_line_numbers = glnm.clone();
     });
     win.window().request_redraw();
 }
