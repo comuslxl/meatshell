@@ -262,7 +262,7 @@ export component TerminalView inherits Rectangle {
     in property <int> gutter-first-row: 0;
     property <length> gutter-w:
         (root.show-line-numbers ? 48px : 0px)
-        + (root.show-timestamps ? 76px : 0px)
+        + (root.show-timestamps ? 84px : 0px)
         + (root.show-line-numbers || root.show-timestamps ? 4px : 0px);
 
     in property <string>  sftp-path: "/";
@@ -607,27 +607,32 @@ export component TerminalView inherits Rectangle {
                 for ts[i] in root.gutter-timestamps : Rectangle {
                     height: root.cell-h;
                     width: parent.width;
-                    // Timestamp: fixed position on the left, right-aligned.
-                    if root.show-timestamps && ts != "" : Text {
-                        x: 4px;
-                        width: 72px;
-                        text: ts;
-                        color: Theme.text-muted;
-                        font-family: Theme.term-font-family;
-                        font-size: Theme.term-font-size;
-                        horizontal-alignment: right;
-                        vertical-alignment: center;
-                    }
-                    // Line number: fixed position on the right, right-aligned.
-                    if root.show-line-numbers : Text {
-                        x: parent.width - 44px - 4px;
-                        width: 44px;
-                        text: (root.gutter-first-row + i + 1);
-                        color: Theme.text-muted;
-                        font-family: Theme.term-font-family;
-                        font-size: Theme.term-font-size;
-                        horizontal-alignment: right;
-                        vertical-alignment: center;
+                    // Only render for non-empty rows.
+                    if ts != "" : Rectangle {
+                        width: parent.width;
+                        height: root.cell-h;
+                        // Timestamp: fixed position on the left, right-aligned.
+                        if root.show-timestamps : Text {
+                            x: 4px;
+                            width: 80px;
+                            text: ts;
+                            color: Theme.text-muted;
+                            font-family: Theme.term-font-family;
+                            font-size: Theme.term-font-size;
+                            horizontal-alignment: right;
+                            vertical-alignment: center;
+                        }
+                        // Line number: fixed position on the right, right-aligned.
+                        if root.show-line-numbers : Text {
+                            x: parent.width - 44px - 4px;
+                            width: 44px;
+                            text: (root.gutter-first-row + i + 1);
+                            color: Theme.text-muted;
+                            font-family: Theme.term-font-family;
+                            font-size: Theme.term-font-size;
+                            horizontal-alignment: right;
+                            vertical-alignment: center;
+                        }
                     }
                 }
             }

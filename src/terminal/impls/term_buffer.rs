@@ -492,6 +492,27 @@ impl TermBuffer {
                 }
             }
         }
+        tracing::debug!(
+            target: "gutter_data",
+            rows = rows,
+            hist_len = hist_len,
+            start = start,
+            "gutter_data sample: [0]={:?} [1]={:?} [2]={:?} [3]={:?} [4]={:?}",
+            timestamps.get(0).map(|s| s.as_str()).unwrap_or(""),
+            timestamps.get(1).map(|s| s.as_str()).unwrap_or(""),
+            timestamps.get(2).map(|s| s.as_str()).unwrap_or(""),
+            timestamps.get(3).map(|s| s.as_str()).unwrap_or(""),
+            timestamps.get(4).map(|s| s.as_str()).unwrap_or(""),
+        );
+        tracing::debug!(
+            target: "gutter_data",
+            "displayed_text sample: [0]={:?} [1]={:?} [2]={:?} [3]={:?} [4]={:?}",
+            self.displayed_text.get(0).map(|s| s.as_str()).unwrap_or(""),
+            self.displayed_text.get(1).map(|s| s.as_str()).unwrap_or(""),
+            self.displayed_text.get(2).map(|s| s.as_str()).unwrap_or(""),
+            self.displayed_text.get(3).map(|s| s.as_str()).unwrap_or(""),
+            self.displayed_text.get(4).map(|s| s.as_str()).unwrap_or(""),
+        );
         (start as i32, timestamps)
     }
 
