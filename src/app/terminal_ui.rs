@@ -181,21 +181,30 @@ pub(super) fn rebuild_tab_display(win: &AppWindow, bufs: &TermBuffers, tab_id: &
         let matches = compute_find_matches(&buf.displayed_text, &buf.find_query);
         let sel = buf.selection_rects_visible(cols);
         let (gfirst, gts) = buf.gutter_data(rows);
-        (b, matches, sel, gfirst, gts)
+
+        // Compute sequential line numbers: count non-empty content rows
+        // BEFORE the visible window to get the correct starting offset.
+        let hist_len = buf.history.len();
+        let hist_before = (gfirst as usize).min(hist_len);
+        let mut seq: i32 = buf
+            .history
+            .iter()
+            .take(hist_before)
+            .filter(|l| !l.0.trim().is_empty())
+            .count() as i32;
+        let gln: Vec<i32> = gts
+            .iter()
+            .map(|ts| if ts.is_empty() { 0 } else { seq += 1; seq })
+            .collect();
+
+        (b, matches, sel, gfirst, gts, gln)
     });
-    let Some((b, matches, sel, gfirst, gts)) = data else {
+    let Some((b, matches, sel, gfirst, gts, gln)) = data else {
         return;
     };
     let spans = ModelRc::from(Rc::new(VecModel::from(b.spans)));
     let fm = ModelRc::from(Rc::new(VecModel::from(matches)));
     let sm = ModelRc::from(Rc::new(VecModel::from(sel)));
-    // Compute sequential line numbers: 0 for empty rows, 1+ for content rows.
-    // Must run before `gts` is moved into `gm` below.
-    let mut seq: i32 = 0;
-    let gln: Vec<i32> = gts
-        .iter()
-        .map(|ts| if ts.is_empty() { 0 } else { seq += 1; seq })
-        .collect();
     let glnm = ModelRc::from(Rc::new(VecModel::from(gln)));
     let gm = ModelRc::from(Rc::new(VecModel::from(
         gts.into_iter().map(SharedString::from).collect::<Vec<_>>(),
