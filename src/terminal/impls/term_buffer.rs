@@ -6,7 +6,7 @@ use crate::terminal::{
 
 fn now_timestamp() -> String {
     use chrono::Local;
-    Local::now().format("%H:%M:%S").to_string()
+    format!("[{}]", Local::now().format("%H:%M:%S"))
 }
 use crate::ui::TermMatch;
 
@@ -455,23 +455,41 @@ impl TermBuffer {
         for i in 0..rows {
             let idx = start + i;
             if idx < hist_len {
-                timestamps.push(
-                    self.history_timestamps
-                        .get(idx)
-                        .cloned()
-                        .unwrap_or_default(),
-                );
+                let is_empty = self
+                    .history
+                    .get(idx)
+                    .map(|l| l.0.trim().is_empty())
+                    .unwrap_or(true);
+                if is_empty {
+                    timestamps.push(String::new());
+                } else {
+                    timestamps.push(
+                        self.history_timestamps
+                            .get(idx)
+                            .cloned()
+                            .unwrap_or_default(),
+                    );
+                }
             } else {
                 // Live screen row — use cached per-row timestamp (populated in
                 // `render`). Falls back to empty for rows that haven't been
                 // rendered yet (e.g. fresh tab before first paint).
                 let live_idx = idx - hist_len;
-                timestamps.push(
-                    self.live_row_timestamps
-                        .get(live_idx)
-                        .cloned()
-                        .unwrap_or_default(),
-                );
+                let is_empty = self
+                    .displayed_text
+                    .get(live_idx)
+                    .map(|s| s.is_empty())
+                    .unwrap_or(true);
+                if is_empty {
+                    timestamps.push(String::new());
+                } else {
+                    timestamps.push(
+                        self.live_row_timestamps
+                            .get(live_idx)
+                            .cloned()
+                            .unwrap_or_default(),
+                    );
+                }
             }
         }
         (start as i32, timestamps)
