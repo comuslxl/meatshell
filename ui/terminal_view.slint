@@ -603,37 +603,31 @@ export component TerminalView inherits Rectangle {
             }
             VerticalLayout {
                 padding: 0px;
+                padding-top: 8px;
                 for ts[i] in root.gutter-timestamps : HorizontalLayout {
                     height: root.cell-h;
-                    // Empty row (ts == "") renders neither timestamp nor line number.
-                    if ts != "" : Rectangle {
-                        width: parent.width;
-                        height: root.cell-h;
-                        HorizontalLayout {
-                            padding-left: 4px;
-                            padding-right: 4px;
-                            spacing: 4px;
-                            // Timestamp on the left, right-aligned.
-                            if root.show-timestamps : Text {
-                                text: ts;
-                                color: Theme.text-muted;
-                                font-family: Theme.term-font-family;
-                                font-size: Theme.fs-sm;
-                                horizontal-alignment: right;
-                                vertical-alignment: center;
-                                width: root.show-line-numbers ? 72px : root.gutter-w - 8px;
-                            }
-                            // Line number on the right, right-aligned.
-                            if root.show-line-numbers : Text {
-                                text: (root.gutter-first-row + i + 1);
-                                color: Theme.text-muted;
-                                font-family: Theme.term-font-family;
-                                font-size: Theme.fs-sm;
-                                horizontal-alignment: right;
-                                vertical-alignment: center;
-                                width: root.show-timestamps ? 44px : root.gutter-w - 8px;
-                            }
-                        }
+                    padding-left: 4px;
+                    padding-right: 4px;
+                    spacing: 4px;
+                    // Timestamp on the left (only for non-empty rows).
+                    if root.show-timestamps && ts != "" : Text {
+                        text: ts;
+                        color: Theme.text-muted;
+                        font-family: Theme.term-font-family;
+                        font-size: Theme.term-font-size;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        width: root.show-line-numbers ? 72px : root.gutter-w - 8px;
+                    }
+                    // Line number on the right (always shown).
+                    if root.show-line-numbers : Text {
+                        text: (root.gutter-first-row + i + 1);
+                        color: Theme.text-muted;
+                        font-family: Theme.term-font-family;
+                        font-size: Theme.term-font-size;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        width: root.show-timestamps ? 44px : root.gutter-w - 8px;
                     }
                 }
             }
